@@ -174,7 +174,8 @@ def create_tasks_batch(task_list: list):
                 expected_duration=task_data['expected_duration'],
                 priority=task_data.get('priority', "medium"),
                 members=task_data.get('members', []),
-                description=task_data.get('description')
+                description=task_data.get('description'),
+                estimated_cost=task_data.get('estimated_cost', 0.0)
             )
             created_ids.append(task_id)
         except Exception as e:
