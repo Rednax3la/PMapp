@@ -1,4 +1,4 @@
-# interface
+# my-first-vue-app
 
 ## Project setup
 ```
