@@ -7,16 +7,16 @@
         <h1>ZainPM</h1>
       </div>
       <div class="nav-links">
-        <div 
-          v-for="item in navItems" 
+        <router-link
+          v-for="item in navItems"
           :key="item.target"
-          class="nav-item" 
-          :class="{ active: activeNav === item.target }"
-          @click="setActiveNav(item.target)"
+          :to="item.path"
+          class="nav-item"
+          :class="{ active: route.path === item.path }"
         >
           <i :class="item.icon"></i>
           <span>{{ item.label }}</span>
-        </div>
+        </router-link>
       </div>
     </div>
     
@@ -61,7 +61,7 @@
         <div class="card">
           <div class="card-header">
             <span>Active Projects</span>
-            <button class="btn btn-primary btn-sm">View All</button>
+            <router-link to="/projects" class="btn btn-primary btn-sm">View All</router-link>
           </div>
           <div class="card-body">
             <div 
@@ -173,6 +173,7 @@
 <script>
 import { ref, reactive, onMounted, watch } from 'vue';
 import Chart from 'chart.js/auto';
+import { useRoute } from 'vue-router';
 
 export default {
   setup() {
@@ -183,22 +184,19 @@ export default {
       localStorage.setItem("zainpm-theme", isDark.value ? "dark" : "light");
     };
 
-    // Navigation
-    const activeNav = ref('dashboard');
+    const route = useRoute();
     const navItems = reactive([
-      { target: 'dashboard', icon: 'fas fa-home', label: 'Dashboard' },
-      { target: 'projects', icon: 'fas fa-project-diagram', label: 'Projects' },
+      { target: 'dashboard', path: '/', icon: 'fas fa-home', label: 'Dashboard' },
+      { target: 'projects', path: '/projects', icon: 'fas fa-project-diagram', label: 'Projects' },
       { target: 'tasks', icon: 'fas fa-tasks', label: 'Tasks' },
       { target: 'gantt', icon: 'fas fa-chart-bar', label: 'Gantt Chart' },
       { target: 'timetable', icon: 'fas fa-calendar-day', label: 'Timetable' },
       { target: 'reports', icon: 'fas fa-chart-pie', label: 'Reports' },
       { target: 'members', icon: 'fas fa-users', label: 'Team Members' },
-      { target: 'settings', icon: 'fas fa-cog', label: 'Settings' }
+      { target: 'settings', icon: 'fas fa-cog', label: 'Settings' },
+      { target: 'help', icon: 'fas fa-question-circle', label: 'Help' },
+      { target: 'logout', path: '/logout', icon: 'fas fa-sign-out-alt', label: 'Logout' }
     ]);
-    
-    const setActiveNav = (target) => {
-      activeNav.value = target;
-    };
 
     // Stats Data
     const stats = reactive([
@@ -316,9 +314,8 @@ export default {
     return {
       isDark,
       toggleTheme,
-      activeNav,
       navItems,
-      setActiveNav,
+      route,
       stats,
       legendItems,
       projects,
@@ -331,45 +328,9 @@ export default {
 };
 </script>
 
-<style>
-/* ZainPM Color Variables */
-:root {
-  --primary: #00fff7;
-  --accent: #00e0ff;
-  --highlight: #00ffb3;
-  --dark-base: #0a0f1c;
-  --soft-grid: #1e2f3a;
-  --shadow-glow: #006b80;
-  --success: #00ffb3;
-  --warning: #ffb300;
-  --danger: #ff0066;
-  --info: #00e0ff;
-  --light-gray: #e9ecef;
-  --border: #1e2f3a;
-  --shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-}
+<style scoped>
 
-/* Light mode overrides */
-.light {
-  --bg-base: #f5fafb;
-  --bg-section: #d6eff3;
-  --text-primary: #102530;
-  --text-secondary: #5c7a89;
-  --border-color: #c7e3ec;
-}
-
-.dark {
-  --bg-base: var(--dark-base);
-  --bg-section: var(--soft-grid);
-  --text-primary: #ffffff;
-  --text-secondary: rgba(255, 255, 255, 0.7);
-  --border-color: var(--shadow-glow);
-}
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+html, body, h1, h2, p, button, input, select, textarea {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
@@ -426,6 +387,12 @@ template, body {
 
 .nav-links {
   padding: 20px 0;
+}
+
+.nav-links .router-link-active {
+  background: rgba(255, 255, 255, 0.1);
+  border-left: 4px solid var(--highlight);
+  color: white;
 }
 
 .nav-item {
