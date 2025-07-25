@@ -132,16 +132,17 @@ h1, h2, h3, h4, h5, h6 {
   overflow-y: auto;
 }
 
-/* Re‑apply the FA5 font to its classes */
-.fas, .far, .fab {
+/* Re‑apply the FA5 font to its classes and their ::before */
+.fas, .far, .fab,
+.fas::before, .far::before, .fab::before {
   font-family: "Font Awesome 5 Free" !important;
 }
 
-.fas {
+.fas, .fas::before {
   font-weight: 900 !important;
 }
 
-.far, .fab {
+.far, .fab, .far::before, .fab::before {
   font-weight: 400 !important;
 }
 

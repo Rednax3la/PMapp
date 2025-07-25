@@ -184,7 +184,7 @@ export default {
       localStorage.setItem("zainpm-theme", isDark.value ? "dark" : "light");
     };
 
-    const route = useRoute();
+    const route = useRoute()
     const navItems = reactive([
       { target: 'dashboard', path: '/', icon: 'fas fa-home', label: 'Dashboard' },
       { target: 'projects', path: '/projects', icon: 'fas fa-project-diagram', label: 'Projects' },
