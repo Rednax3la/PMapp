@@ -1,15 +1,21 @@
 <template>
-  <router-view />
+  <AdminDashboard/>
 </template>
 
 <script>
+import AdminDashboard from './views/AdminDashboard.vue';
+
 export default {
-  name: 'App'
+  name: 'App',
+  components: {
+    AdminDashboard
+  }
 }
 </script>
 
 <style>
 #app {
+  font-family: Avenir, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-align: center;

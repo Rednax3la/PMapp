@@ -1,17 +1,13 @@
+// src/router/index.js
 import { createRouter, createWebHistory } from 'vue-router'
 import AdminDashboard from '../views/AdminDashboard.vue'
-import Projects from '../views/Projects.vue'
+
 
 const routes = [
   {
     path: '/',
     name: 'Dashboard',
     component: AdminDashboard
-  },
-  {
-    path: '/projects',
-    name: 'Projects',
-    component: Projects
   }
 ]
 

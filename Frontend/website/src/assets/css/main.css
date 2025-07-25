@@ -1,0 +1,272 @@
+/* src/assets/css/main.css */
+
+/* ===================================================================
+   1. ZainPM Color Variables (Your Enhanced Scheme)
+   =================================================================== */
+:root {
+  /* Core ZainPM Palette */
+  --primary: #00fff7;
+  --accent: #00e0ff;
+  --highlight: #00ffb3;
+  --dark-base: #0a0f1c;
+  --soft-grid: #1e2f3a;
+  --shadow-glow: #006b80;
+  --success: #00ffb3;
+  --warning: #ffb300;
+  --danger: #ff0066;
+  --info: #00e0ff;
+  --light-gray: #e9ecef;
+  --border: #1e2f3a;
+  --shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  --sfinal: #03bde2;
+}
+
+/* Light mode — your custom overrides */
+.light {
+  /* MAIN BACKGROUNDS */
+  --bg-base: #d8e3e7;   /* soft pale cyan */
+  --bg-section: #bccdd1;   /* muted slate‑blue panels */
+  /* TEXT */
+  --text-primary: #1e303b;  /* charcoal */
+  --text-secondary: #5f7a85;  /* muted slate */
+
+  /* BORDERS & GRID */
+  --border-color: #798489;  /* gentle blue‑grey */
+  --soft-grid: #b4c7cc;  /* faint grid lines */
+
+  /* CARD SURFACE & SHADOW */
+  --card-bg: #424647;  
+  --card-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+
+  /* HOVER/ACTIVE STATES */
+  --hover-bg: rgba(0, 0, 0, 0.02);
+  --active-bg: rgba(0, 0, 0, 0.04);
+
+  /* BUTTON & STATS ACCENTS */
+  --primary: #006b80;  /* deep teal‑blue */
+  --success: #227a5b;  /* muted emerald */
+  --warning: #d58c1a;  /* warm amber */
+  --danger: #3080b3;  /* shift red → cobalt blue */
+  --info: #3399cc;  /* sky blue */
+
+  /* STATE BADGES */
+  --state-tentative: #95a5a6;
+  --state-delayed: #3080b3;  /* delayed now blueish */
+  --state-in-progress: #006b80;
+  --state-overdue: #3399cc;
+  --state-complete: #227a5b;
+}
+
+/* Dark mode overrides */
+.dark {
+  --bg-base: var(--dark-base);
+  --bg-section: var(--soft-grid);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --border-color: var(--shadow-glow);
+}
+
+/* ===================================================================
+   2. Global Resets & Base Styles
+   =================================================================== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+html, body, #app {
+  width: 100%;
+  height: 100%;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  overflow: hidden;
+  line-height: 1.6;
+}
+
+/* ===================================================================
+   3. Font Awesome Icon Fix (Critical for Icon Visibility)
+   =================================================================== */
+.fas, .far, .fab {
+  font-family: "Font Awesome 5 Free" !important;
+}
+
+.fas {
+  font-weight: 900 !important;
+}
+
+.far, .fab {
+  font-weight: 400 !important;
+}
+
+/* ===================================================================
+   4. Light Mode Text Fixes (Your Custom Requirements)
+   =================================================================== */
+/* 1) Calendar icons & date text visibility */
+.light .task-meta span,
+.light .task-meta span i.far.fa-calendar {
+  color: var(--text-primary) !important;
+}
+
+/* 2) Stats card labels readability */
+.light .stat-label {
+  color: var(--text-primary) !important;
+}
+
+/* 3) Button text contrast */
+.light .btn-primary,
+.light .btn-success,
+.light button.btn-sm {
+  color: #fff !important;
+}
+
+/* 4) State badges adjusted for light mode */
+.light .state-in-progress {
+  background: rgba(0, 107, 128, 0.2) !important; 
+  color: #006b80 !important;
+}
+
+.light .priority-high,
+.light .priority-medium,
+.light .priority-low {
+  color: #003f54 !important;
+}
+
+/* 5) Legend labels contrast */
+.light .state-legend span {
+  color: #32414d;
+}
+
+.light .logo h1 {
+  color: var(--accent);
+}
+
+/* ===================================================================
+   5. Common Component Styles
+   =================================================================== */
+/* Buttons */
+.btn {
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.btn-primary { background: var(--primary); color: var(--dark-base); }
+.btn-success { background: var(--success); color: var(--dark-base); }
+.btn-warning { background: var(--warning); color: var(--dark-base); }
+.btn-danger { background: var(--danger); color: var(--dark-base); }
+.btn-sm { padding: 6px 12px; font-size: 14px; }
+
+.btn:hover {
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+/* Cards */
+.card {
+  background: var(--bg-section);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  margin-bottom: 25px;
+}
+
+.card-header {
+  padding: 15px 20px;
+  background: rgba(0, 0, 0, 0.1);
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-primary);
+}
+
+.card-body {
+  padding: 15px 20px;
+}
+
+/* State Badges */
+.state-badge {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 500;
+  display: inline-block;
+}
+
+.state-tentative {
+  background: rgba(108, 117, 125, 0.2);
+  color: var(--text-secondary);
+}
+
+.state-delayed {
+  background: rgba(230, 57, 70, 0.2);
+  color: var(--danger);
+}
+
+.state-in-progress {
+  background: rgba(73, 80, 246, 0.2);
+  color: var(--accent);
+}
+
+.state-overdue {
+  background: rgba(247, 37, 133, 0.2);
+  color: var(--warning);
+}
+
+.state-complete {
+  background: rgba(76, 201, 240, 0.2);
+  color: var(--success);
+}
+
+/* ===================================================================
+   6. Layout Helpers
+   =================================================================== */
+.main-content {
+  flex: 1;
+  margin-left: 260px;
+  padding: 20px;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+/* ===================================================================
+   7. Responsive Design
+   =================================================================== */
+@media (max-width: 992px) {
+  .main-content { margin-left: 80px; }
+}
+
+@media (max-width: 768px) {
+  .grid { 
+    grid-template-columns: 1fr !important; 
+  }
+}

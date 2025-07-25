@@ -7,16 +7,16 @@
         <h1>ZainPM</h1>
       </div>
       <div class="nav-links">
-        <router-link
-          v-for="item in navItems"
+        <div 
+          v-for="item in navItems" 
           :key="item.target"
-          :to="item.path"
-          class="nav-item"
-          :class="{ active: route.path === item.path }"
+          class="nav-item" 
+          :class="{ active: activeNav === item.target }"
+          @click="setActiveNav(item.target)"
         >
           <i :class="item.icon"></i>
           <span>{{ item.label }}</span>
-        </router-link>
+        </div>
       </div>
     </div>
     
@@ -41,9 +41,8 @@
       <!-- Stats Overview -->
       <div class="stats-grid">
         <div class="stat-card" v-for="stat in stats" :key="stat.label">
-          <i :class="stat.icon" :style="{ color: stat.color }"></i>
-          <div class="stat-value">{{ stat.value }}</div>
           <div class="stat-label">{{ stat.label }}</div>
+          <div class="stat-value">{{ stat.value }}</div>
         </div>
       </div>
       
@@ -61,7 +60,7 @@
         <div class="card">
           <div class="card-header">
             <span>Active Projects</span>
-            <router-link to="/projects" class="btn btn-primary btn-sm">View All</router-link>
+            <button class="btn btn-primary btn-sm">View All</button>
           </div>
           <div class="card-body">
             <div 
@@ -173,7 +172,7 @@
 <script>
 import { ref, reactive, onMounted, watch } from 'vue';
 import Chart from 'chart.js/auto';
-import { useRoute } from 'vue-router';
+import { computed } from 'vue';
 
 export default {
   setup() {
@@ -184,10 +183,11 @@ export default {
       localStorage.setItem("zainpm-theme", isDark.value ? "dark" : "light");
     };
 
-    const route = useRoute()
+    // Navigation
+    const activeNav = ref('dashboard');
     const navItems = reactive([
-      { target: 'dashboard', path: '/', icon: 'fas fa-home', label: 'Dashboard' },
-      { target: 'projects', path: '/projects', icon: 'fas fa-project-diagram', label: 'Projects' },
+      { target: 'dashboard', icon: 'fas fa-home', label: 'Dashboard' },
+      { target: 'projects', icon: 'fas fa-project-diagram', label: 'Projects' },
       { target: 'tasks', icon: 'fas fa-tasks', label: 'Tasks' },
       { target: 'gantt', icon: 'fas fa-chart-bar', label: 'Gantt Chart' },
       { target: 'timetable', icon: 'fas fa-calendar-day', label: 'Timetable' },
@@ -197,23 +197,32 @@ export default {
       { target: 'help', icon: 'fas fa-question-circle', label: 'Help' },
       { target: 'logout', path: '/logout', icon: 'fas fa-sign-out-alt', label: 'Logout' }
     ]);
+    
+    const setActiveNav = (target) => {
+      activeNav.value = target;
+    };
 
     // Stats Data
     const stats = reactive([
-      { icon: 'fas fa-project-diagram fa-2x', value: '12', label: 'Active Projects', color: 'var(--primary)' },
-      { icon: 'fas fa-tasks fa-2x', value: '84', label: 'Total Tasks', color: 'var(--accent)' },
-      { icon: 'fas fa-users fa-2x', value: '23', label: 'Team Members', color: 'var(--success)' },
-      { icon: 'fas fa-check-circle fa-2x', value: '42%', label: 'Completion Rate', color: 'var(--warning)' }
+      { label: 'Active Projects', value: '12', color: 'var(--primary)' },
+      { label: 'Total Tasks', value: '84', color: 'var(--primary)' },
+      { label: 'Team Members', value: '23', color: 'var(--success)' },
+      { label: 'Completion Rate', value: '42%', color: 'var(--warning)' }
     ]);
 
     // Legend Items
-    const legendItems = reactive([
-      { label: 'Tentative', color: 'rgba(108, 117, 125, 0.2)' },
-      { label: 'Delayed', color: 'rgba(230, 57, 70, 0.2)' },
-      { label: 'In Progress', color: 'rgba(73, 80, 246, 0.2)' },
-      { label: 'Overdue', color: 'rgba(247, 37, 133, 0.2)' },
-      { label: 'Complete', color: 'rgba(76, 201, 240, 0.2)' }
-    ]);
+    const legendItems = computed(() => {
+      // use a higher alpha in light mode for contrast
+      const a = isDark.value ? 0.2 : 0.5;
+      return [
+        { label: 'Tentative',    color: `rgba(108, 117, 125, ${a})` },
+        { label: 'Delayed',      color: `rgba(230, 57,   70,  ${a})` },
+        { label: 'In Progress',  color: `rgba(73,  80,  246, ${a})` },
+        { label: 'Overdue',      color: `rgba(247, 37,  133, ${a})` },
+        { label: 'Complete',     color: `rgba(76,  201, 240, ${a})` }
+      ];
+    });
+
 
     // Sample Data
     const projects = reactive([
@@ -314,8 +323,9 @@ export default {
     return {
       isDark,
       toggleTheme,
+      activeNav,
       navItems,
-      route,
+      setActiveNav,
       stats,
       legendItems,
       projects,
@@ -328,9 +338,140 @@ export default {
 };
 </script>
 
-<style scoped>
+<style>
+/* ZainPM Color Variables */
+:root {
+  --primary: #00fff7;
+  --accent: #00e0ff;
+  --highlight: #00ffb3;
+  --dark-base: #0a0f1c;
+  --soft-grid: #1e2f3a;
+  --shadow-glow: #006b80;
+  --success: #00ffb3;
+  --warning: #ffb300;
+  --danger: #ff0066;
+  --info: #00e0ff;
+  --light-gray: #e9ecef;
+  --border: #1e2f3a;
+  --shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+  --sfinal:#03bde2;
+}
 
-html, body, h1, h2, p, button, input, select, textarea {
+/* Light mode — only main content & buttons, sidebar 100% untouched */
+.light {
+  /* MAIN BACKGROUNDS */
+  --bg-base:        #d8e3e7;   /* soft pale cyan */
+  --bg-section:     #bccdd1;   /* muted slate‑blue panels */
+  /* TEXT */
+  --text-primary:    #1e303b;  /* charcoal */
+  --text-secondary:  #5f7a85;  /* muted slate */
+
+  /* BORDERS & GRID */
+  --border-color:    #798489;  /* gentle blue‑grey */
+  --soft-grid:       #b4c7cc;  /* faint grid lines */
+
+  /* CARD SURFACE & SHADOW */
+  --card-bg:         #424647;  
+  --card-shadow:     0 2px 8px rgba(0, 0, 0, 0.06);
+
+  /* HOVER/ACTIVE STATES */
+  --hover-bg:        rgba(0, 0, 0, 0.02);
+  --active-bg:       rgba(0, 0, 0, 0.04);
+
+  /* BUTTON & STATS ACCENTS */
+  --primary:         #006b80;  /* deep teal‑blue */
+  --success:         #227a5b;  /* muted emerald */
+  --warning:         #d58c1a;  /* warm amber */
+  --danger:          #3080b3;  /* shift red → cobalt blue */
+  --info:            #3399cc;  /* sky blue */
+
+  /* STATE BADGES (if you want blue for “delayed” etc, override here too) */
+  --state-tentative:   #95a5a6;
+  --state-delayed:     #3080b3;  /* delayed now blueish */
+  --state-in-progress: #006b80;
+  --state-overdue:     #3399cc;
+  --state-complete:    #227a5b;
+}
+
+/* 1) Make calendar icons & date text black for visibility */
+.light .task-meta span,
+.light .task-meta span i.far.fa-calendar {
+  color: #000 !important;
+}
+
+/* 2) Force stats card labels (“Active Projects”, etc.) to pure black */
+.light .stat-label {
+  color: #000 !important;
+}
+
+/* 3) Button text brighter—use white */
+.light .btn-primary,
+.light .btn-success,
+.light button.btn-sm {
+  color: #fff !important;
+}
+
+/* 4) Darken the ‘In Progress’ and “2 days left” badges */
+.light .state-in-progress {
+  /* darker-blue background, less neon */
+  background: rgba(0, 107, 128, 0.2) !important; 
+  color: #006b80 !important;
+}
+
+/* 5) (Optional) if you have other “priority” or “badge” classes still neon, tweak similarly */
+.light .priority-high,
+.light .priority-medium,
+.light .priority-low {
+  /* example: make all priorities the same dark tone */
+  color: #003f54 !important;
+}
+
+/* 6) Make legend labels darker for contrast */
+.light .state-legend span {
+  color: #32414d;  /* darker slate than var(--text-secondary) */
+}
+
+.light .logo h1 {
+  color: var(--accent);
+}
+
+.dark {
+  --bg-base: var(--dark-base);
+  --bg-section: var(--soft-grid);
+  --text-primary: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.7);
+  --border-color: var(--shadow-glow);
+}
+
+/* 1) Match dates, calendar icon & “X days left” to team‑member text colour */
+.light .task-meta span,
+.light .task-meta span i.far.fa-calendar,
+.light .state-tentative { 
+  color: var(--text-primary) !important; 
+}
+
+/* 2) Stat‑card labels same as team‑member text */
+.light .stat-label {
+  color: var(--text-primary) !important;
+}
+
+/* 3) Legend labels a bit darker for contrast */
+.light .state-legend span {
+  color: #32414d;  /* darker slate than var(--text-secondary) */
+}
+
+/* 4) Buttons keep white text */
+.light .btn-primary,
+.light .btn-success,
+.light button.btn-sm {
+  color: #fff !important;
+}
+
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
@@ -355,7 +496,7 @@ template, body {
 
 .sidebar {
   width: 260px;
-  background: linear-gradient(180deg, var(--shadow-glow), var(--accent));
+  background: linear-gradient(180deg, var(--shadow-glow), var(--sfinal))!important;
   color: white;
   padding: 20px 0;
   position: fixed;
@@ -389,19 +530,13 @@ template, body {
   padding: 20px 0;
 }
 
-.nav-links .router-link-active {
-  background: rgba(255, 255, 255, 0.1);
-  border-left: 4px solid var(--highlight);
-  color: white;
-}
-
 .nav-item {
   padding: 12px 20px;
   display: flex;
   align-items: center;
   cursor: pointer;
   transition: all 0.3s ease;
-  color: rgba(255, 255, 255, 0.9);
+  color: rgba(248, 247, 247, 0.9);
 }
 
 .nav-item:hover, .nav-item.active {
@@ -613,8 +748,8 @@ template, body {
 }
 
 .stat-label {
-  color: var(--text-secondary);
-  font-size: 16px;
+  color: var(--text-primary);
+  font-size: 20px;
 }
 
 .state-legend {
