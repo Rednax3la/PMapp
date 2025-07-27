@@ -320,7 +320,7 @@ export default {
         location: 'New York, NY',
         role: 'Senior Designer',
         status: 'Active',
-        avatar: 'https://images.unsplash.com/photo-1494790108755-2616b612b814?w=150&h=150&fit=crop&crop=face',
+        avatar: 'https://ix-marketing.imgix.net/focalpoint.png?auto=format,compress&w=1446',
         projects: 3,
         activeTasks: 8,
         totalTasks: 12,

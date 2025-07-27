@@ -413,10 +413,19 @@ export default {
     };
 
     const getProgressColor = (progress) => {
-      if (progress >= 80) return 'var(--success)';
-      if (progress >= 60) return 'var(--primary)';
-      if (progress >= 40) return 'var(--warning)';
-      return 'var(--danger)';
+      if (isDark.value) {
+        // Original bright colors for dark mode
+        if (progress >= 80) return '#00ffb3';
+        if (progress >= 60) return '#00fff7';
+        if (progress >= 40) return '#ffb300';
+        return '#ff0066';
+      } else {
+        // Softer colors for light mode
+        if (progress >= 80) return '#059669';
+        if (progress >= 60) return '#0891b2';
+        if (progress >= 40) return '#d97706';
+        return '#dc2626';
+      }
     };
 
     const getEfficiencyClass = (efficiency) => {
@@ -440,6 +449,17 @@ export default {
 
       const textColor = isDark.value ? '#ffffff' : '#102530';
       const gridColor = isDark.value ? '#1e2f3a' : '#c7e3ec';
+      
+      // Theme-aware color palette
+      const colors = {
+        primary: isDark.value ? '#00fff7' : '#0891b2',
+        success: isDark.value ? '#00ffb3' : '#059669',
+        warning: isDark.value ? '#ffb300' : '#d97706',
+        danger: isDark.value ? '#ff0066' : '#dc2626',
+        purple: isDark.value ? '#9c88ff' : '#7c3aed',
+        orange: isDark.value ? '#ff6b6b' : '#ea580c',
+        gray: isDark.value ? '#6c757d' : '#6b7280'
+      };
 
       // Progress Chart
       if (progressChart.value) {
@@ -450,8 +470,11 @@ export default {
             datasets: [{
               label: 'Project Progress',
               data: [20, 35, 45, 60, 70, 75],
-              borderColor: 'var(--primary)',
-              backgroundColor: 'rgba(0, 255, 247, 0.1)',
+              borderColor: colors.primary,
+              backgroundColor: isDark.value ? 'rgba(0, 255, 247, 0.1)' : 'rgba(8, 145, 178, 0.1)',
+              pointBackgroundColor: colors.primary,
+              pointBorderColor: isDark.value ? '#ffffff' : '#ffffff',
+              pointBorderWidth: 2,
               tension: 0.4,
               fill: true
             }]
@@ -485,11 +508,13 @@ export default {
             datasets: [{
               data: [45, 30, 15, 10],
               backgroundColor: [
-                'var(--success)',
-                'var(--primary)',
-                'var(--warning)',
-                'var(--danger)'
-              ]
+                colors.success,
+                colors.primary,
+                colors.warning,
+                colors.danger
+              ],
+              borderColor: isDark.value ? '#1a2332' : '#ffffff',
+              borderWidth: 2
             }]
           },
           options: {
@@ -498,7 +523,11 @@ export default {
             plugins: {
               legend: { 
                 position: 'right',
-                labels: { color: textColor }
+                labels: { 
+                  color: textColor,
+                  usePointStyle: true,
+                  padding: 15
+                }
               }
             }
           }
@@ -514,8 +543,14 @@ export default {
             datasets: [{
               label: 'Tasks Completed',
               data: [12, 19, 8, 15, 10],
-              backgroundColor: 'var(--accent)',
-              borderColor: 'var(--primary)',
+              backgroundColor: [
+                colors.primary,
+                colors.success, 
+                colors.warning,
+                colors.orange,
+                colors.purple
+              ],
+              borderColor: colors.primary,
               borderWidth: 1
             }]
           },
@@ -548,11 +583,15 @@ export default {
             datasets: [{
               label: 'Planned',
               data: [100, 100, 100, 100, 100],
-              backgroundColor: 'rgba(108, 117, 125, 0.3)'
+              backgroundColor: isDark.value ? 'rgba(108, 117, 125, 0.4)' : 'rgba(107, 114, 128, 0.3)',
+              borderColor: colors.gray,
+              borderWidth: 1
             }, {
               label: 'Actual',
               data: [75, 45, 90, 30, 60],
-              backgroundColor: 'var(--primary)'
+              backgroundColor: colors.primary,
+              borderColor: colors.success,
+              borderWidth: 1
             }]
           },
           options: {
@@ -575,7 +614,7 @@ export default {
           }
         });
       }
-    };
+    };  
 
     onMounted(() => {
       const savedTheme = localStorage.getItem("zainpm-theme");
@@ -617,8 +656,8 @@ export default {
       getEfficiencyClass,
       sortBy
     };
-  }
-};
+  } 
+};  
 </script>
 
 <style scoped>

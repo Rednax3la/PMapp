@@ -63,7 +63,7 @@
         <div class="card">
           <div class="card-header">
             <span>Recent Tasks</span>
-            <AppButton variant="primary" size="small">View All</AppButton>
+            <router-link to="/tasks" class="btn btn-primary btn-sm">View All</router-link>
           </div>
           <div class="card-body">
             <div 
