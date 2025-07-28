@@ -14,38 +14,6 @@
         </template>
       </AppHeader>
       
-      <!-- Report Filters -->
-      <div class="filters-section">
-        <div class="filter-group">
-          <label>Date Range:</label>
-          <div class="date-range">
-            <input type="date" v-model="startDate" class="date-input">
-            <span>to</span>
-            <input type="date" v-model="endDate" class="date-input">
-          </div>
-        </div>
-        
-        <div class="filter-group">
-          <label>Project:</label>
-          <select v-model="selectedProject" class="filter-select">
-            <option value="">All Projects</option>
-            <option v-for="project in projects" :key="project" :value="project">
-              {{ project }}
-            </option>
-          </select>
-        </div>
-        
-        <div class="filter-group">
-          <label>Team Member:</label>
-          <select v-model="selectedMember" class="filter-select">
-            <option value="">All Members</option>
-            <option v-for="member in teamMembers" :key="member" :value="member">
-              {{ member }}
-            </option>
-          </select>
-        </div>
-      </div>
-      
       <!-- Key Metrics -->
       <div class="metrics-grid">
         <div class="metric-card" v-for="metric in keyMetrics" :key="metric.label">
@@ -116,6 +84,38 @@
         </div>
       </div>
       
+      <!-- Report Filters -->
+      <div class="filters-section">
+        <div class="filter-group">
+          <label>Date Range:</label>
+          <div class="date-range">
+            <input type="date" v-model="startDate" class="date-input">
+            <span>to</span>
+            <input type="date" v-model="endDate" class="date-input">
+          </div>
+        </div>
+        
+        <div class="filter-group">
+          <label>Project:</label>
+          <select v-model="selectedProject" class="filter-select">
+            <option value="">All Projects</option>
+            <option v-for="project in projects" :key="project" :value="project">
+              {{ project }}
+            </option>
+          </select>
+        </div>
+        
+        <div class="filter-group">
+          <label>Team Member:</label>
+          <select v-model="selectedMember" class="filter-select">
+            <option value="">All Members</option>
+            <option v-for="member in teamMembers" :key="member" :value="member">
+              {{ member }}
+            </option>
+          </select>
+        </div>
+      </div>
+
       <!-- Detailed Reports Table -->
       <div class="table-section">
         <div class="card">
