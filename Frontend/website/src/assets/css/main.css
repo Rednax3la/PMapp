@@ -163,13 +163,14 @@ html, body, #app {
   gap: 8px;
   transition: all 0.3s ease;
   text-decoration: none;
+  height: 30px;
 }
 
 .btn-primary { background: var(--primary); color: var(--dark-base); }
 .btn-success { background: var(--success); color: var(--dark-base); }
 .btn-warning { background: var(--warning); color: var(--dark-base); }
 .btn-danger { background: var(--danger); color: var(--dark-base); }
-.btn-sm { padding: 6px 12px; font-size: 14px; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
 
 .btn:hover {
   opacity: 0.9;

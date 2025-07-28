@@ -8,10 +8,10 @@
       <AppHeader title="Dashboard">
         <template #actions>
           <ThemeToggle :is-dark="isDark" @toggle="toggleTheme" />
-          <AppButton variant="primary" icon="fas fa-plus">
+          <AppButton variant="primary" class= "btn" icon="fas fa-plus">
             New Project
           </AppButton>
-          <AppButton variant="success" icon="fas fa-plus">
+          <AppButton variant="success" class= "btn" icon="fas fa-plus">
             Add Task
           </AppButton>
         </template>

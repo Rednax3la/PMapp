@@ -46,6 +46,7 @@ export default {
   justify-content: center;
   gap: 8px;
   text-decoration: none;
+  font-size: 12px;
 }
 
 .btn-primary {
