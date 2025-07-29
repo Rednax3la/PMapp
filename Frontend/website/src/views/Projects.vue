@@ -8,13 +8,13 @@
       <AppHeader title="Projects">
         <template #actions>
           <ThemeToggle :is-dark="isDark" @toggle="toggleTheme" />
-          <AppButton variant="primary" icon="fas fa-plus">
+          <AppButton variant="primary" icon="fas fa-plus" @click="showCreateModal = true">
             New Project
           </AppButton>
         </template>
       </AppHeader>
       
-      <!-- Projects Filter and Search -->
+      <!-- Filters and Search -->
       <div class="filters-section">
         <div class="search-box">
           <i class="fas fa-search"></i>
@@ -22,9 +22,8 @@
             type="text" 
             v-model="searchQuery" 
             placeholder="Search projects..."
-          >
+          />
         </div>
-        
         <div class="filter-controls">
           <select v-model="statusFilter" class="filter-select">
             <option value="">All Statuses</option>
@@ -32,7 +31,6 @@
               {{ status }}
             </option>
           </select>
-          
           <select v-model="sortBy" class="filter-select">
             <option value="name">Sort by Name</option>
             <option value="startDate">Sort by Start Date</option>
@@ -40,68 +38,100 @@
           </select>
         </div>
       </div>
-      
+
+      <!-- Loading & Error States -->
+      <div v-if="loading" class="loading">
+        <p>Loading projects...</p>
+      </div>
+      <div v-if="error" class="error">
+        <p>{{ error }}</p>
+        <AppButton @click="loadProjects" variant="primary">Retry</AppButton>
+      </div>
+
       <!-- Projects Grid -->
-      <div class="projects-grid">
+      <div v-if="!loading && !error" class="projects-grid">
         <div 
           v-for="project in filteredProjects" 
           :key="project.id" 
-          class="project-card"
+          class="project-card" 
           @click="selectProject(project)"
         >
           <div class="project-header">
             <h3 class="project-title">{{ project.name }}</h3>
             <StateBadge :status="project.status" />
           </div>
-          
           <div class="project-meta">
             <div class="meta-item">
               <i class="far fa-calendar"></i>
-              <span>{{ formatDateRange(project.startDate, project.endDate) }}</span>
+              <span>{{ formatDate(project.startDate) }} <span v-if="project.endDate">- {{ formatDate(project.endDate) }}</span></span>
             </div>
             <div class="meta-item">
               <i class="fas fa-tasks"></i>
-              <span>{{ project.tasks }} tasks</span>
+              <span>{{ project.tasks?.length || project.tasks }} tasks</span>
             </div>
             <div class="meta-item">
               <i class="fas fa-users"></i>
-              <span>{{ project.team.length }} members</span>
+              <span>{{ project.team?.length || project.team }} members</span>
             </div>
           </div>
-          
           <div class="progress-section">
             <div class="progress-bar">
               <div 
                 class="progress-fill" 
-                :style="{ width: project.progress + '%', background: project.progressColor }"
+                :style="{ width: project.progress + '%' }"
               ></div>
             </div>
             <span class="progress-value">{{ project.progress }}%</span>
           </div>
-          
-          <div class="project-actions">
-            <AppButton variant="icon" icon="fas fa-eye" tooltip="View Details" />
-            <AppButton variant="icon" icon="fas fa-edit" tooltip="Edit Project" />
-            <AppButton variant="icon" icon="fas fa-chart-bar" tooltip="View Reports" />
-            <AppButton variant="icon" icon="fas fa-trash" tooltip="Delete Project" />
-          </div>
         </div>
       </div>
-      
+
       <!-- Empty State -->
-      <div v-if="filteredProjects.length === 0" class="empty-state">
+      <div v-if="!loading && !error && filteredProjects.length === 0" class="empty-state">
         <i class="fas fa-project-diagram fa-3x"></i>
         <h3>No projects found</h3>
         <p>Try adjusting your search filters or create a new project</p>
-        <AppButton variant="primary" icon="fas fa-plus">
+        <AppButton variant="primary" icon="fas fa-plus" @click="showCreateModal = true">
           Create New Project
         </AppButton>
       </div>
-      
+
+      <!-- Create Project Modal -->
+      <div v-if="showCreateModal" class="modal-overlay" @click="showCreateModal = false">
+        <div class="modal" @click.stop>
+          <h3>Create New Project</h3>
+          <form @submit.prevent="createProject">
+            <div class="form-group">
+              <label>Project Name *</label>
+              <input v-model="newProject.project_name" type="text" required />
+            </div>
+            <div class="form-group">
+              <label>Start Date</label>
+              <input v-model="newProject.start_date" type="date" />
+            </div>
+            <div class="form-group">
+              <label>Timezone</label>
+              <select v-model="newProject.timezone">
+                <option value="Africa/Addis_Ababa">Africa/Addis_Ababa</option>
+                <option value="UTC">UTC</option>
+                <option value="America/New_York">America/New_York</option>
+                <option value="Europe/London">Europe/London</option>
+              </select>
+            </div>
+            <div class="modal-actions">
+              <AppButton type="button" @click="showCreateModal = false">Cancel</AppButton>
+              <AppButton type="submit" :disabled="createLoading" variant="primary">
+                {{ createLoading ? 'Creating...' : 'Create Project' }}
+              </AppButton>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <!-- Project Details Modal -->
       <ProjectModal 
-        v-if="selectedProject" 
-        :project="selectedProject" 
+        v-if="selectedProject"
+        :project="selectedProject"
         @close="selectedProject = null"
       />
     </div>
@@ -110,13 +140,13 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue';
-import { format } from 'date-fns';
 import Sidebar from '@/components/layout/Sidebar.vue';
 import AppHeader from '@/components/layout/AppHeader.vue';
 import ThemeToggle from '@/components/layout/ThemeToggle.vue';
 import StateBadge from '@/components/ui/StateBadge.vue';
 import AppButton from '@/components/ui/AppButton.vue';
 import ProjectModal from '@/components/projects/ProjectModal.vue';
+import { projectService } from '@/services/projects';
 
 export default {
   name: 'ProjectsPage',
@@ -126,173 +156,101 @@ export default {
     ThemeToggle,
     StateBadge,
     AppButton,
-    ProjectModal
+    ProjectModal,
   },
   setup() {
-    // Theme Management
+    // Theme
     const isDark = ref(true);
     const toggleTheme = () => {
       isDark.value = !isDark.value;
-      localStorage.setItem("zainpm-theme", isDark.value ? "dark" : "light");
+      localStorage.setItem('zainpm-theme', isDark.value ? 'dark' : 'light');
     };
 
-    // Project Data
-    const projects = ref([
-      {
-        id: 1,
-        name: 'Website Redesign',
-        description: 'Complete overhaul of company website with modern design and improved user experience',
-        startDate: new Date(2023, 5, 1),
-        endDate: new Date(2023, 6, 15),
-        status: 'In Progress',
-        progress: 65,
-        progressColor: '#00e0ff',
-        tasks: 18,
-        team: ['Sarah Johnson', 'Michael Chen', 'Emma Rodriguez'],
-        budget: 15000,
-        spent: 9800
-      },
-      {
-        id: 2,
-        name: 'Mobile App Development',
-        description: 'Development of cross-platform mobile application for iOS and Android',
-        startDate: new Date(2023, 5, 10),
-        endDate: new Date(2023, 7, 5),
-        status: 'Tentative',
-        progress: 15,
-        progressColor: '#6c757d',
-        tasks: 24,
-        team: ['David Kim', 'Priya Patel'],
-        budget: 25000,
-        spent: 4200
-      },
-      {
-        id: 3,
-        name: 'Marketing Campaign',
-        description: 'Q3 marketing campaign for new product launch with social media integration',
-        startDate: new Date(2023, 4, 15),
-        endDate: new Date(2023, 5, 30),
-        status: 'Overdue',
-        progress: 85,
-        progressColor: '#f72585',
-        tasks: 12,
-        team: ['James Wilson', 'Emma Rodriguez', 'Michael Chen'],
-        budget: 8000,
-        spent: 7800
-      },
-      {
-        id: 4,
-        name: 'API Integration',
-        description: 'Integration with third-party services and external APIs',
-        startDate: new Date(2023, 6, 1),
-        endDate: new Date(2023, 7, 20),
-        status: 'Not Started',
-        progress: 0,
-        progressColor: '#6c757d',
-        tasks: 8,
-        team: ['David Kim'],
-        budget: 5000,
-        spent: 0
-      },
-      {
-        id: 5,
-        name: 'Database Migration',
-        description: 'Migration to cloud-based database solution with improved performance',
-        startDate: new Date(2023, 5, 20),
-        endDate: new Date(2023, 7, 10),
-        status: 'In Progress',
-        progress: 40,
-        progressColor: '#00e0ff',
-        tasks: 14,
-        team: ['Priya Patel', 'Michael Chen'],
-        budget: 12000,
-        spent: 5200
-      },
-      {
-        id: 6,
-        name: 'UI/UX Overhaul',
-        description: 'User interface and experience improvements across all platforms',
-        startDate: new Date(2023, 6, 5),
-        endDate: new Date(2023, 8, 1),
-        status: 'Planning',
-        progress: 10,
-        progressColor: '#6c757d',
-        tasks: 16,
-        team: ['Sarah Johnson', 'Emma Rodriguez'],
-        budget: 9000,
-        spent: 900
-      }
-    ]);
+    // Data & State
+    const projects = ref([]);
+    const loading = ref(false);
+    const error = ref(null);
+    const showCreateModal = ref(false);
+    const createLoading = ref(false);
+    const selectedProject = ref(null);
 
-    // Filtering and Sorting
+    // Filters
     const searchQuery = ref('');
     const statusFilter = ref('');
     const sortBy = ref('name');
-    const selectedProject = ref(null);
-    
-    const statusOptions = ref([
-      'Planning', 'Tentative', 'In Progress', 
-      'Delayed', 'Overdue', 'Complete', 'Not Started'
-    ]);
+    const statusOptions = [
+      'Planning', 'Tentative', 'In Progress', 'Delayed', 'Overdue', 'Complete', 'Not Started'
+    ];
 
+    // New Project form
+    const newProject = ref({ project_name: '', start_date: '', timezone: 'Africa/Addis_Ababa' });
+
+    // Fetch projects
+    const loadProjects = async () => {
+      loading.value = true;
+      error.value = null;
+      try {
+        const resp = await projectService.getProjects();
+        projects.value = resp.projects || [];
+      } catch (e) {
+        error.value = e.message || 'Failed to load';
+      } finally {
+        loading.value = false;
+      }
+    };
+
+    // Create project
+    const createProject = async () => {
+      createLoading.value = true;
+      try {
+        await projectService.createProject(newProject.value);
+        showCreateModal.value = false;
+        newProject.value = { project_name: '', start_date: '', timezone: 'Africa/Addis_Ababa' };
+        await loadProjects();
+      } catch (e) {
+        alert('Failed to create project: ' + (e.message || e));
+      } finally {
+        createLoading.value = false;
+      }
+    };
+
+    // Select for detail view
+    const selectProject = (p) => selectedProject.value = p;
+
+    // Computed filtered and sorted
     const filteredProjects = computed(() => {
-      let result = [...projects.value];
-      
-      // Apply search filter
+      let res = projects.value.slice();
       if (searchQuery.value) {
-        const query = searchQuery.value.toLowerCase();
-        result = result.filter(p => 
-          p.name.toLowerCase().includes(query) || 
-          p.description.toLowerCase().includes(query)
-        );
+        const q = searchQuery.value.toLowerCase();
+        res = res.filter(p => p.name.toLowerCase().includes(q));
       }
-      
-      // Apply status filter
-      if (statusFilter.value) {
-        result = result.filter(p => p.status === statusFilter.value);
-      }
-      
-      // Apply sorting
-      if (sortBy.value === 'name') {
-        result.sort((a, b) => a.name.localeCompare(b.name));
-      } else if (sortBy.value === 'startDate') {
-        result.sort((a, b) => a.startDate - b.startDate);
-      } else if (sortBy.value === 'endDate') {
-        result.sort((a, b) => a.endDate - b.endDate);
-      }
-      
-      return result;
+      if (statusFilter.value) res = res.filter(p => p.status === statusFilter.value);
+      if (sortBy.value === 'name') res.sort((a,b)=>a.name.localeCompare(b.name));
+      else if (sortBy.value === 'startDate') res.sort((a,b)=>new Date(a.startDate)-new Date(b.startDate));
+      else if (sortBy.value === 'endDate') res.sort((a,b)=>new Date(a.endDate)-new Date(b.endDate));
+      return res;
     });
 
-    // Helper functions
-    const formatDateRange = (start, end) => {
-      return `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`;
-    };
-    
-    const selectProject = (project) => {
-      selectedProject.value = project;
-    };
+    // Date formatting
+    const formatDate = d => d ? new Date(d).toLocaleDateString() : 'N/A';
 
     onMounted(() => {
-      // Load theme preference
-      const savedTheme = localStorage.getItem("zainpm-theme");
-      if (savedTheme === "light") {
-        isDark.value = false;
-      }
+      // theme pref
+      const saved = localStorage.getItem('zainpm-theme');
+      if (saved === 'light') isDark.value = false;
+      loadProjects();
     });
 
     return {
-      isDark,
-      toggleTheme,
-      projects,
-      searchQuery,
-      statusFilter,
-      sortBy,
-      statusOptions,
-      filteredProjects,
+      isDark, toggleTheme,
+      projects, loading, error,
+      showCreateModal, createLoading,
       selectedProject,
-      formatDateRange,
-      selectProject
+      searchQuery, statusFilter, sortBy, statusOptions,
+      newProject,
+      filteredProjects,
+      loadProjects, createProject, selectProject,
+      formatDate,
     };
   }
 };
@@ -327,7 +285,6 @@ export default {
   max-width: 400px;
   position: relative;
 }
-
 .search-box i {
   position: absolute;
   left: 12px;
@@ -335,7 +292,6 @@ export default {
   transform: translateY(-50%);
   color: var(--text-secondary);
 }
-
 .search-box input {
   width: 100%;
   padding: 12px 20px 12px 40px;
@@ -350,7 +306,6 @@ export default {
   display: flex;
   gap: 15px;
 }
-
 .filter-select {
   padding: 12px 20px;
   border-radius: 8px;
@@ -359,6 +314,14 @@ export default {
   color: var(--text-primary);
   font-size: 14px;
   min-width: 180px;
+}
+
+.loading, .error {
+  text-align: center;
+  padding: 2rem;
+  background: var(--bg-section);
+  border-radius: 8px;
+  margin: 1rem 0;
 }
 
 .projects-grid {
@@ -377,7 +340,6 @@ export default {
   transition: all 0.3s ease;
   cursor: pointer;
 }
-
 .project-card:hover {
   transform: translateY(-5px);
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
@@ -390,12 +352,10 @@ export default {
   align-items: flex-start;
   margin-bottom: 15px;
 }
-
 .project-title {
   font-size: 18px;
   font-weight: 600;
   margin-right: 15px;
-  color: var(--text-primary);
 }
 
 .project-meta {
@@ -404,7 +364,6 @@ export default {
   gap: 10px;
   margin-bottom: 20px;
 }
-
 .meta-item {
   display: flex;
   align-items: center;
@@ -419,7 +378,6 @@ export default {
   gap: 15px;
   margin-bottom: 20px;
 }
-
 .progress-bar {
   flex: 1;
   height: 8px;
@@ -427,24 +385,15 @@ export default {
   border-radius: 4px;
   overflow: hidden;
 }
-
 .progress-fill {
   height: 100%;
   border-radius: 4px;
   transition: width 0.3s ease;
+  background: var(--accent);
 }
-
 .progress-value {
   font-weight: 600;
   font-size: 14px;
-  min-width: 40px;
-  color: var(--text-primary);
-}
-
-.project-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
 }
 
 .empty-state {
@@ -454,64 +403,68 @@ export default {
   border-radius: 12px;
   border: 1px dashed var(--border-color);
 }
-
 .empty-state i {
   color: var(--accent);
   margin-bottom: 20px;
 }
-
 .empty-state h3 {
   font-size: 22px;
   margin-bottom: 10px;
-  color: var(--text-primary);
 }
 
-.empty-state p {
-  color: var(--text-secondary);
-  margin-bottom: 20px;
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
 }
-
-/* Light mode specific adjustments */
-.light .search-box input {
+.modal {
   background: var(--bg-section);
-  color: var(--text-primary);
+  border-radius: 8px;
+  padding: 2rem;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.form-group {
+  margin-bottom: 1rem;
+}
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+}
+.modal-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
 }
 
-.light .filter-select {
-  background: var(--bg-section);
-  color: var(--text-primary);
-}
-
-.light .meta-item {
-  color: var(--text-primary);
-}
-
+/* Responsive */
 @media (max-width: 992px) {
-  .main-content {
-    margin-left: 80px;
-  }
-  
-  .filters-section {
-    flex-direction: column;
-  }
-  
-  .search-box {
-    max-width: 100%;
-  }
+  .main-content { margin-left: 80px; }
+  .filters-section { flex-direction: column; }
+  .search-box { max-width: 100%; }
 }
-
 @media (max-width: 768px) {
-  .projects-grid {
-    grid-template-columns: 1fr;
-  }
-  
-  .filter-controls {
-    flex-direction: column;
-    width: 100%;
-  }
-  
-  .filter-select {
-    width: 100%;
-  }
+  .projects-grid { grid-template-columns: 1fr; }
+  .filter-controls { flex-direction: column; width: 100%; }
+  .filter-select { width: 100%; }
 }
 </style>

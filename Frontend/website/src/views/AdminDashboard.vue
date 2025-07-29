@@ -8,12 +8,6 @@
       <AppHeader title="Dashboard">
         <template #actions>
           <ThemeToggle :is-dark="isDark" @toggle="toggleTheme" />
-          <AppButton variant="primary" class= "btn" icon="fas fa-plus">
-            New Project
-          </AppButton>
-          <AppButton variant="success" class= "btn" icon="fas fa-plus">
-            Add Task
-          </AppButton>
         </template>
       </AppHeader>
       
@@ -148,7 +142,6 @@ import Chart from 'chart.js/auto';
 import Sidebar from '@/components/layout/Sidebar.vue';
 import AppHeader from '@/components/layout/AppHeader.vue';
 import ThemeToggle from '@/components/layout/ThemeToggle.vue';
-import AppButton from '@/components/ui/AppButton.vue';
 import StateBadge from '@/components/ui/StateBadge.vue';
 
 export default {
@@ -157,7 +150,6 @@ export default {
     Sidebar,
     AppHeader, 
     ThemeToggle,
-    AppButton,
     StateBadge
   },
   setup() {

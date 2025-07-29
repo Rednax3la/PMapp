@@ -3,6 +3,7 @@ import pytz
 import os
 import traceback
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from validators import ProjectCreate, TaskCreate, BatchTaskCreate
 from createandget import create_project, create_project_update, create_task, create_task_update, fetch_priority, get_latest_progress, get_member_tasks, get_project_by_company_and_name, get_project_tasks, create_tasks_batch, get_task_by_name, get_project_by_name, get_task_state, projects_db, tasks_db, updates_db
 from helpers import format_duration, parse_duration, save_uploaded_file
@@ -14,6 +15,7 @@ from flask_jwt_extended import (
 )
 
 app = Flask(__name__)
+CORS(app, origins=['http://localhost:8080'], supports_credentials=True)
 app.register_blueprint(projects_bp)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
