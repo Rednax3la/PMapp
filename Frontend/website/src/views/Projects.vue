@@ -147,6 +147,7 @@ import StateBadge from '@/components/ui/StateBadge.vue';
 import AppButton from '@/components/ui/AppButton.vue';
 import ProjectModal from '@/components/projects/ProjectModal.vue';
 import { projectService } from '@/services/projects';
+import { useUserStore } from '@/store/user'
 
 export default {
   name: 'ProjectsPage',
@@ -159,6 +160,7 @@ export default {
     ProjectModal,
   },
   setup() {
+    const userStore = useUserStore()
     // Theme
     const isDark = ref(true);
     const toggleTheme = () => {
@@ -203,7 +205,12 @@ export default {
     const createProject = async () => {
       createLoading.value = true;
       try {
-        await projectService.createProject(newProject.value);
+        await projectService.createProject({
+        ...newProject.value,
+        company_name: userStore.currentUser.company_name, 
+        project_type: 'scheduled',                         
+        objectives: []                                     
+      });
         showCreateModal.value = false;
         newProject.value = { project_name: '', start_date: '', timezone: 'Africa/Addis_Ababa' };
         await loadProjects();
@@ -251,8 +258,9 @@ export default {
       filteredProjects,
       loadProjects, createProject, selectProject,
       formatDate,
+      userStore
     };
-  }
+  },
 };
 </script>
 
