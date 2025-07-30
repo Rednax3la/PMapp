@@ -1,3 +1,4 @@
+//Frontend/website/src/components/projects/ProjectModal.vue
 <template>
   <div class="modal-overlay" @click.self="$emit('close')">
     <div class="modal-content">

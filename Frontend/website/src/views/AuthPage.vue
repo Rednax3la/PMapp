@@ -1,3 +1,4 @@
+//Frontend/website/src/views/AuthPage.vue
 <template>
   <div class="auth-container">
     <div class="auth-card">

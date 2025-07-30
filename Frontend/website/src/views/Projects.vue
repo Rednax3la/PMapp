@@ -1,3 +1,4 @@
+//Frontend/website/src/views/Projects.vue
 <template>
   <div class="projects-page" :class="{ dark: isDark, light: !isDark }">
     <!-- Sidebar -->
@@ -148,6 +149,8 @@ import AppButton from '@/components/ui/AppButton.vue';
 import ProjectModal from '@/components/projects/ProjectModal.vue';
 import { projectService } from '@/services/projects';
 import { useUserStore } from '@/store/user'
+import { authService } from '@/services/auth';
+
 
 export default {
   name: 'ProjectsPage',
@@ -191,8 +194,14 @@ export default {
     const loadProjects = async () => {
       loading.value = true;
       error.value = null;
+      const user = authService.getCurrentUser();
+      if (!user) {
+        error.value = 'Not signed in';
+        loading.value = false;
+        return;
+      }
+      const resp = await projectService.getProjects(user.company_name);
       try {
-        const resp = await projectService.getProjects();
         projects.value = resp.projects || [];
       } catch (e) {
         error.value = e.message || 'Failed to load';
@@ -419,6 +428,12 @@ export default {
   font-size: 22px;
   margin-bottom: 10px;
 }
+
+.empty-state p {
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+}
+
 
 /* Modal Styles */
 .modal-overlay {

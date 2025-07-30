@@ -1,3 +1,4 @@
+//Frontend/website/src/views/Members.vue
 <template>
   <div class="members-page" :class="{ dark: isDark, light: !isDark }">
     <!-- Sidebar -->

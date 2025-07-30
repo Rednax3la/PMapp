@@ -1,3 +1,4 @@
+//Frontend/website/src/components/layout/Sidebar.vue
 <template>
   <aside class="sidebar">
     <div class="logo">

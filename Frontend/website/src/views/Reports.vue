@@ -1,3 +1,4 @@
+//Frontend/website/src/views/Reports.vue
 <template>
   <div class="reports-page" :class="{ dark: isDark, light: !isDark }">
     <!-- Sidebar -->

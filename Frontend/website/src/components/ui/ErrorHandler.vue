@@ -1,4 +1,4 @@
-<!-- src/components/ui/ErrorHandler.vue -->
+//Frontend/website/src/components/ui/ErrorHandler.vue
 <template>
   <div v-if="error" class="error-container">
     <div class="error-card">

@@ -1,4 +1,4 @@
-// src/router/index.js - Updated with authentication guards
+//Frontend/website/src/router/index.js
 
 import { createRouter, createWebHistory } from 'vue-router'
 import { authService } from '@/services/auth'

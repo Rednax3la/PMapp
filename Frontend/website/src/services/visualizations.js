@@ -1,3 +1,4 @@
+// Frontend/website/src/services/visualizations.js
 import api from './api'
 
 export const visualizationService = {

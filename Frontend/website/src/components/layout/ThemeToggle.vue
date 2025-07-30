@@ -1,3 +1,4 @@
+//Frontend/website/src/components/layout/ThemeToggle.vue
 <template>
   <button class="theme-toggle" @click="$emit('toggle')">
     <i :class="isDark ? 'fas fa-sun' : 'fas fa-moon'"></i>

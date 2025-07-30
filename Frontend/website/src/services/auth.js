@@ -1,4 +1,4 @@
-// src/services/auth.js - Enhanced auth service
+// Frontend/website/src/services/auth.js
 
 import api from './api'
 

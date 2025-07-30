@@ -1,3 +1,4 @@
+//Frontend/website/src/views/Settings.vue
 <template>
   <div class="settings-page" :class="{ dark: isDark, light: !isDark }">
     <!-- Sidebar -->

@@ -1,3 +1,4 @@
+//Frontend/website/src/components/layout/AppHeader.vue
 <template>
   <header class="header">
     <h2>{{ title }}</h2>

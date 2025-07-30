@@ -1,3 +1,4 @@
+//Frontend/website/src/components/ui/AppButton.vue
 <template>
   <button
     :class="['btn', variantClass, sizeClass]"

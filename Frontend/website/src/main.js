@@ -1,4 +1,4 @@
-// src/main.js - Updated main file
+//Frontend/website/src/main.js
 
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'

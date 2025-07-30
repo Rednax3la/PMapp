@@ -1,9 +1,10 @@
+//Frontend/website/src/components/tasks/CreateTaskModal.vue
 <template>
   <div class="modal-overlay" @click="$emit('close')">
     <div class="modal" @click.stop>
       <h3>Create New Task</h3>
       
-      <form @submit.prevent="createTask">
+      <form @submit.prevent="createTask" class="task-form">
         <div class="form-group">
           <label>Project *</label>
           <select v-model="taskData.project_name" required>
@@ -46,21 +47,21 @@
 
         <div class="form-group">
           <label>Assigned Members</label>
-          <div class="members-input">
+          <div class="tag-input">
             <input 
               v-model="memberInput" 
               type="text" 
-              placeholder="Enter member name and press Enter"
+              placeholder="Enter member and press Enter"
               @keyup.enter="addMember"
             />
-            <div class="members-list">
+            <div class="tags">
               <span 
-                v-for="(member, index) in taskData.members" 
-                :key="index"
-                class="member-tag"
+                v-for="(member, i) in taskData.members" 
+                :key="i"
+                class="tag"
               >
                 {{ member }}
-                <button type="button" @click="removeMember(index)">&times;</button>
+                <button type="button" @click="removeMember(i)">&times;</button>
               </span>
             </div>
           </div>
@@ -68,21 +69,21 @@
 
         <div class="form-group">
           <label>Dependencies</label>
-          <div class="dependencies-input">
+          <div class="tag-input">
             <input 
               v-model="dependencyInput" 
               type="text" 
-              placeholder="Enter task name and press Enter"
+              placeholder="Enter dependency and press Enter"
               @keyup.enter="addDependency"
             />
-            <div class="dependencies-list">
+            <div class="tags">
               <span 
-                v-for="(dep, index) in taskData.dependencies" 
-                :key="index"
-                class="dependency-tag"
+                v-for="(dep, i) in taskData.dependencies" 
+                :key="i"
+                class="tag"
               >
                 {{ dep }}
-                <button type="button" @click="removeDependency(index)">&times;</button>
+                <button type="button" @click="removeDependency(i)">&times;</button>
               </span>
             </div>
           </div>
@@ -105,22 +106,15 @@
 </template>
 
 <script>
+import AppButton from '@/components/ui/AppButton.vue'
 import { taskService } from '@/services/tasks'
 import { authService } from '@/services/auth'
-import AppButton from '@/components/ui/AppButton.vue'
 
 export default {
   name: 'CreateTaskModal',
-  components: {
-    AppButton
-  },
-  props: {
-    projects: {
-      type: Array,
-      default: () => []
-    }
-  },
-  emits: ['close', 'task-created'],
+  components: { AppButton },
+  props: { projects: Array },
+  emits: ['close','task-created'],
   data() {
     return {
       loading: false,
@@ -141,48 +135,38 @@ export default {
   },
   methods: {
     addMember() {
-      if (this.memberInput.trim() && !this.taskData.members.includes(this.memberInput.trim())) {
-        this.taskData.members.push(this.memberInput.trim())
-        this.memberInput = ''
+      const m = this.memberInput.trim()
+      if (m && !this.taskData.members.includes(m)) {
+        this.taskData.members.push(m)
       }
+      this.memberInput = ''
     },
-
-    removeMember(index) {
-      this.taskData.members.splice(index, 1)
-    },
-
+    removeMember(i) { this.taskData.members.splice(i,1) },
     addDependency() {
-      if (this.dependencyInput.trim() && !this.taskData.dependencies.includes(this.dependencyInput.trim())) {
-        this.taskData.dependencies.push(this.dependencyInput.trim())
-        this.dependencyInput = ''
+      const d = this.dependencyInput.trim()
+      if (d && !this.taskData.dependencies.includes(d)) {
+        this.taskData.dependencies.push(d)
       }
+      this.dependencyInput = ''
     },
-
-    removeDependency(index) {
-      this.taskData.dependencies.splice(index, 1)
-    },
+    removeDependency(i) { this.taskData.dependencies.splice(i,1) },
 
     async createTask() {
       this.loading = true
-      
       try {
         const user = authService.getCurrentUser()
-        const taskPayload = {
+        const payload = {
           ...this.taskData,
-          company_name: user.company_name
+          company_name: user.company_name,
+          start_time: this.taskData.start_time 
+            ? new Date(this.taskData.start_time).toISOString() 
+            : undefined
         }
-        
-        // Convert start_time to proper format if provided
-        if (taskPayload.start_time) {
-          taskPayload.start_time = new Date(taskPayload.start_time).toISOString()
-        }
-        
-        const result = await taskService.createTask(taskPayload)
-        this.$emit('task-created', result)
+        const res = await taskService.createTask(payload)
+        this.$emit('task-created', res)
         this.$emit('close')
-        
-      } catch (error) {
-        alert('Failed to create task: ' + error)
+      } catch (e) {
+        alert('Failed to create task: '+e)
       } finally {
         this.loading = false
       }
@@ -193,98 +177,54 @@ export default {
 
 <style scoped>
 .modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: fixed; inset: 0;
   background: rgba(0,0,0,0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+  display:flex; align-items:center; justify-content:center;
+  z-index:1000;
 }
-
 .modal {
-  background: white;
+  background: var(--bg-section);
   border-radius: 8px;
   padding: 2rem;
-  width: 90%;
-  max-width: 600px;
-  max-height: 90vh;
-  overflow-y: auto;
+  width: 90%; max-width: 600px;
+  max-height: 90vh; overflow-y: auto;
+  box-shadow: var(--shadow);
 }
-
 .form-group {
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
 }
-
 .form-group label {
-  display: block;
-  margin-bottom: 0.5rem;
   font-weight: 500;
+  display: block;
+  color: var(--text-primary);
+  margin-bottom: 0.5rem;
 }
-
 .form-group input,
 .form-group select,
 .form-group textarea {
-  width: 100%;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  width:100%;
+  padding:0.75rem;
+  border:1px solid var(--border-color);
+  border-radius:6px;
+  font-size:1rem;
+  background: var(--bg-base);
+  color: var(--text-primary);
 }
-
-.members-input,
-.dependencies-input {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+.tag-input .tags {
+  display:flex; flex-wrap:wrap; gap:0.5rem; margin-top:0.5rem;
 }
-
-.members-list,
-.dependencies-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+.tag {
+  background: var(--accent);
+  color: var(--dark-base);
+  padding:0.25rem 0.5rem;
+  border-radius:12px;
+  display:flex; align-items:center; gap:0.25rem;
 }
-
-.member-tag,
-.dependency-tag {
-  background: var(--primary);
-  color: white;
-  padding: 0.25rem 0.5rem;
-  border-radius: 16px;
-  font-size: 0.8rem;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
+.tag button {
+  background:none; border:none; cursor:pointer;
+  font-size:1rem; line-height:1;
 }
-
-.member-tag button,
-.dependency-tag button {
-  background: none;
-  border: none;
-  color: white;
-  font-size: 1rem;
-  cursor: pointer;
-  padding: 0;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.member-tag button:hover,
-.dependency-tag button:hover {
-  background: rgba(255,255,255,0.2);
-}
-
 .modal-actions {
-  display: flex;
-  gap: 1rem;
-  justify-content: flex-end;
-  margin-top: 1.5rem;
+  display:flex; justify-content:flex-end; gap:1rem; margin-top:2rem;
 }
 </style>

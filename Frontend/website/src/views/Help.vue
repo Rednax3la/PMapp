@@ -1,3 +1,4 @@
+//Frontend/website/src/views/Help.vue
 <template>
   <div class="help-page" :class="{ dark: isDark, light: !isDark }">
     <!-- Sidebar -->

@@ -1,4 +1,4 @@
-// src/stores/user.js - Pinia store for user management
+//Frontend/website/src/store/user.js
 
 import { defineStore } from 'pinia'
 import { authService } from '@/services/auth'

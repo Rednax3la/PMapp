@@ -1,3 +1,4 @@
+//Frontend/website/src/views/AdminDashboard.vue
 <template>
   <div class="admin-dashboard" :class="{ dark: isDark, light: !isDark }">  
     <!-- Sidebar -->

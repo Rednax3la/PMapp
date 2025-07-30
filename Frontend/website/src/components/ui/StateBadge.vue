@@ -1,3 +1,4 @@
+//Frontend/website/src/components/ui/StateBadge.vue
 <template>
   <span class="state-badge" :class="badgeClass">
     {{ status }}
