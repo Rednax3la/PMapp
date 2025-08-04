@@ -10,17 +10,22 @@ export const authService = {
         password
       })
       
-      const { access_token, company_name, role } = response.data
+      const { access_token, username: returnedUsername, company_name, role } = response.data
+      
+      // Create complete user data object
+      const userData = {
+        username: returnedUsername || username,
+        company_name: company_name,
+        role: role
+      }
       
       // Store token and user data
       localStorage.setItem('access_token', access_token)
-      localStorage.setItem('user_data', JSON.stringify({
-        username,
-        company_name,
-        role
-      }))
+      localStorage.setItem('user_data', JSON.stringify(userData))
       
-      return response.data
+      console.log('Login successful, stored user data:', userData) // Debug log
+      
+      return { ...response.data, user: userData }
     } catch (error) {
       console.error('Login error:', error)
       
@@ -92,12 +97,49 @@ export const authService = {
     window.location.href = '/auth'
   },
 
+  // Add method to decode JWT and extract claims
+  decodeJWTClaims(token) {
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]))
+      return {
+        username: payload.sub || payload.identity,
+        company_name: payload.company_name,
+        role: payload.role,
+        exp: payload.exp
+      }
+    } catch (error) {
+      console.error('Failed to decode JWT:', error)
+      return null
+    }
+  },
+
   getCurrentUser() {
     try {
+      // First try localStorage
       const userStr = localStorage.getItem('user_data')
-      return userStr ? JSON.parse(userStr) : null
+      if (userStr) {
+        const userData = JSON.parse(userStr)
+        // Verify userData has required fields
+        if (userData.username && userData.company_name) {
+          return userData
+        }
+      }
+      
+      // Fallback: decode from JWT
+      const token = localStorage.getItem('access_token')
+      if (token) {
+        const claims = this.decodeJWTClaims(token)
+        if (claims && claims.company_name) {
+          // Update localStorage with decoded claims
+          localStorage.setItem('user_data', JSON.stringify(claims))
+          console.log('Restored user data from JWT:', claims) // Debug log
+          return claims
+        }
+      }
+      
+      return null
     } catch (error) {
-      console.error('Error parsing user data:', error)
+      console.error('Error getting current user:', error)
       this.logout() // Clear invalid data
       return null
     }

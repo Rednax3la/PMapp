@@ -25,21 +25,67 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 @app.route('/projects', methods=['POST'])
 @jwt_required()
 def create_project_endpoint():
-    claims = get_jwt()
-    data = request.json
-    if claims['company_name'] != data.get('company_name'):
-        return jsonify({"error": "Unauthorized access"}), 403
+    print("=== PROJECT CREATION ENDPOINT ===")
+    
     try:
-        project_data = ProjectCreate(**data)
+        claims = get_jwt()
+        print(f"JWT Claims: {claims}")
+        
+        data = request.json
+        print(f"Request data: {data}")
+        
+        # Check company authorization
+        if claims['company_name'] != data.get('company_name'):
+            print(f"Unauthorized: JWT company '{claims['company_name']}' != request company '{data.get('company_name')}'")
+            return jsonify({"error": "Unauthorized access"}), 403
+        
+        print("Company authorization passed")
+        
+        # Handle start_date conversion
+        if data.get('start_date'):
+            try:
+                # Parse date string to datetime
+                date_str = data['start_date']
+                if isinstance(date_str, str):
+                    # Parse date string (YYYY-MM-DD)
+                    parsed_date = datetime.strptime(date_str, '%Y-%m-%d')
+                    # Make it timezone-aware using project timezone
+                    timezone_str = data.get('timezone', 'UTC')
+                    tz = pytz.timezone(timezone_str)
+                    data['start_date'] = tz.localize(parsed_date)
+                    print(f"Converted start_date: {data['start_date']}")
+            except Exception as date_error:
+                print(f"Date parsing error: {date_error}")
+                return jsonify({"error": f"Invalid date format: {str(date_error)}"}), 400
+        
+        # Validate project data
+        try:
+            project_data = ProjectCreate(**data)
+            print(f"ProjectCreate validation passed: {project_data}")
+        except Exception as validation_error:
+            print(f"ProjectCreate validation failed: {validation_error}")
+            return jsonify({"error": f"Validation error: {str(validation_error)}"}), 400
+        
+        # Handle start_date
         if not project_data.start_date:
             project_data.start_date = datetime.now(pytz.UTC)
+            print(f"Set default start_date: {project_data.start_date}")
+        
         now = datetime.now(pytz.UTC)
-        if project_data.project_type == "scheduled" and project_data.start_date < now:
-            return jsonify({
-                "error": "Scheduled projects cannot start in the past – "
-                         "either set start_date ≥ now or use project_type='documented'"
-            }), 400
+        print(f"Current time: {now}")
+        print(f"Project start_date: {project_data.start_date}")
+        
+        # Check scheduled project timing (convert both to UTC for comparison)
+        if project_data.project_type == "scheduled":
+            start_utc = project_data.start_date.astimezone(pytz.UTC) if project_data.start_date.tzinfo else pytz.UTC.localize(project_data.start_date)
+            if start_utc < now:
+                print(f"Scheduled project start date is in the past: {start_utc} < {now}")
+                return jsonify({
+                    "error": "Scheduled projects cannot start in the past – "
+                             "either set start_date ≥ now or use project_type='documented'"
+                }), 400
 
+        print("About to call create_project function")
         project = create_project(
             name=project_data.project_name,
             start_date=project_data.start_date,
@@ -48,10 +94,14 @@ def create_project_endpoint():
             timezone=project_data.timezone,
             project_type=project_data.project_type
         )
+        
         if not project:
+            print("create_project returned None - project name already exists")
             return jsonify({"error": "Project name already exists"}), 400
-            
-        return jsonify({
+        
+        print(f"Project created successfully: {project}")
+        
+        response_data = {
             "project_id": project['id'],
             "project_name": project['name'],
             "start_date": project['start_date'].isoformat(),
@@ -59,9 +109,17 @@ def create_project_endpoint():
             "timezone": project['timezone'],
             "project_type": project['project_type'],
             "objectives": project['objectives'],
-        }), 201
+        }
+        
+        print(f"Returning response: {response_data}")
+        return jsonify(response_data), 201
+        
     except Exception as e:
-        return jsonify({"error": str(e)}), 400
+        print(f"Unexpected error in create_project_endpoint: {e}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
 @app.route('/tasks', methods=['POST'])
 def tasks_endpoint():
@@ -656,6 +714,8 @@ def login():
     if not user or user['password'] != data['password']:
         return jsonify({"error": "Invalid credentials"}), 401
     
+    print(f"Login successful for user: {user['username']}, company: {user['company_name']}")  # Debug log
+    
     # Create JWT token
     access_token = create_access_token(
         identity=user['username'],
@@ -665,23 +725,16 @@ def login():
         }
     )
     
-    return jsonify({
+    response_data = {
         "access_token": access_token,
         "username": user['username'],
         "company_name": user['company_name'],
         "role": user['role']
-    }), 200
+    }
+    
+    print(f"Sending login response: {response_data}")  # Debug log
+    
+    return jsonify(response_data), 200
 
-
-# Protected endpoint example
-@app.route('/protected', methods=['GET'])
-@jwt_required()
-def protected():
-    claims = get_jwt()
-    return jsonify(
-        logged_in_as=get_jwt_identity(),
-        company_name=claims['company_name'],
-        role=claims['role']
-    ), 200
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)

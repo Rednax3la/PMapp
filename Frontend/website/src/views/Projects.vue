@@ -148,9 +148,8 @@ import StateBadge from '@/components/ui/StateBadge.vue';
 import AppButton from '@/components/ui/AppButton.vue';
 import ProjectModal from '@/components/projects/ProjectModal.vue';
 import { projectService } from '@/services/projects';
-import { useUserStore } from '@/store/user'
+import { useUserStore } from '@/store/user';
 import { authService } from '@/services/auth';
-
 
 export default {
   name: 'ProjectsPage',
@@ -163,7 +162,8 @@ export default {
     ProjectModal,
   },
   setup() {
-    const userStore = useUserStore()
+    const userStore = useUserStore();
+
     // Theme
     const isDark = ref(true);
     const toggleTheme = () => {
@@ -195,16 +195,25 @@ export default {
       loading.value = true;
       error.value = null;
       const user = authService.getCurrentUser();
-      if (!user) {
-        error.value = 'Not signed in';
+      if (!user || !user.company_name) {
+        error.value = 'User not authenticated or company name missing';
         loading.value = false;
         return;
       }
-      const resp = await projectService.getProjects(user.company_name);
       try {
-        projects.value = resp.projects || [];
+        const resp = await projectService.getProjects(user.company_name);
+        const projectsData = resp.projects || [];
+    
+        // Add default properties for projects that might be missing them
+        projects.value = projectsData.map(project => ({
+          ...project,
+          status: project.status || 'Not Started',
+          progress: project.progress || 0,
+          tasks: project.tasks || [],
+          team: project.team || []
+        }));
       } catch (e) {
-        error.value = e.message || 'Failed to load';
+        error.value = e.message || 'Failed to load projects';
       } finally {
         loading.value = false;
       }
@@ -212,21 +221,69 @@ export default {
 
     // Create project
     const createProject = async () => {
+      console.log('Attempting to create new project...');
       createLoading.value = true;
-      try {
-        await projectService.createProject({
-        ...newProject.value,
-        company_name: userStore.currentUser.company_name, 
-        project_type: 'scheduled',                         
-        objectives: []                                     
+      error.value = null;
+      
+      // Enhanced debugging
+      console.log('=== PROJECT CREATION DEBUG ===');
+      console.log('User store state:', {
+        user: userStore.user,
+        isAuthenticated: userStore.isAuthenticated,
+        companyName: userStore.companyName
       });
+      console.log('localStorage access_token:', localStorage.getItem('access_token') ? 'Present' : 'Missing');
+      console.log('localStorage user_data:', localStorage.getItem('user_data'));
+      
+      // Try to get company name with fallback
+      let companyName = userStore.currentUser?.company_name || userStore.companyName;
+      
+      if (!companyName) {
+        console.warn('Company name is missing, attempting to re-initialize auth');
+        // Try to re-initialize auth
+        userStore.initializeAuth();
+        companyName = userStore.currentUser?.company_name || userStore.companyName;
+        
+        if (!companyName) {
+          console.error('Failed to restore company name');
+          alert('Cannot create project: company name missing. Please log in again.');
+          createLoading.value = false;
+          return;
+        }
+        console.log('Successfully restored company name:', companyName);
+      }
+
+      try {
+        // Convert date string to proper format
+        let startDate = null;
+        if (newProject.value.start_date) {
+        startDate = newProject.value.start_date;
+        }
+
+        const payload = {
+          project_name: newProject.value.project_name,
+          start_date: startDate,
+          timezone: newProject.value.timezone,
+          company_name: companyName,
+          project_type: 'scheduled',
+          objectives: []
+        };
+
+        console.log('Project Payload:', payload);
+        console.log('Calling projectService.createProject...');
+        const response = await projectService.createProject(payload);
+        console.log('Project creation successful:', response);
         showCreateModal.value = false;
         newProject.value = { project_name: '', start_date: '', timezone: 'Africa/Addis_Ababa' };
         await loadProjects();
       } catch (e) {
-        alert('Failed to create project: ' + (e.message || e));
+        console.error('Error during project creation:', e);
+        const errorMessage = e.message || e.toString() || 'Unknown error occurred';
+        alert('Failed to create project: ' + errorMessage);
+        error.value = errorMessage; // Also set the error state for UI display
       } finally {
         createLoading.value = false;
+        console.log('Exiting createProject method.');
       }
     };
 
@@ -251,7 +308,6 @@ export default {
     const formatDate = d => d ? new Date(d).toLocaleDateString() : 'N/A';
 
     onMounted(() => {
-      // theme pref
       const saved = localStorage.getItem('zainpm-theme');
       if (saved === 'light') isDark.value = false;
       loadProjects();

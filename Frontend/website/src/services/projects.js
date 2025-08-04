@@ -4,10 +4,39 @@ import api from './api'
 export const projectService = {
   async createProject(projectData) {
     try {
+      console.log('Sending project data to backend:', projectData)
       const response = await api.post('/projects', projectData)
+      console.log('Backend response:', response.data)
       return response.data
     } catch (error) {
-      throw error.response?.data?.message || 'Failed to create project'
+      console.error('Project creation error details:', error)
+      console.error('Error response:', error.response)
+      
+      // Extract the actual error message from backend
+      let errorMessage = 'Failed to create project'
+      
+      if (error.response) {
+        console.error('Backend error status:', error.response.status)
+        console.error('Backend error data:', error.response.data)
+        
+        // Try different ways to extract the error message
+        if (error.response.data?.error) {
+          errorMessage = error.response.data.error
+        } else if (error.response.data?.message) {
+          errorMessage = error.response.data.message
+        } else if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data
+        } else {
+          errorMessage = `Server error (${error.response.status}): ${error.response.statusText}`
+        }
+      } else if (error.request) {
+        errorMessage = 'No response from server. Please check your connection.'
+      } else {
+        errorMessage = error.message || 'Unknown error occurred'
+      }
+      
+      console.error('Final error message:', errorMessage)
+      throw new Error(errorMessage)
     }
   },
 
@@ -18,7 +47,16 @@ export const projectService = {
       })
       return response.data
     } catch (error) {
-      throw error.response?.data?.message || 'Failed to fetch projects'
+      console.error('Get projects error:', error)
+      let errorMessage = 'Failed to fetch projects'
+      
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message
+      }
+      
+      throw new Error(errorMessage)
     }
   },
 
@@ -30,7 +68,7 @@ export const projectService = {
       const response = await api.post('/projects/latest_updates', payload)
       return response.data
     } catch (error) {
-      throw error.response?.data?.message || 'Failed to fetch updates'
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to fetch updates')
     }
   },
 
@@ -43,7 +81,7 @@ export const projectService = {
       })
       return response.data
     } catch (error) {
-      throw error.response?.data?.message || 'Failed to split project'
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to split project')
     }
   },
 
@@ -58,7 +96,7 @@ export const projectService = {
       const response = await api.post('/projects/merge', payload)
       return response.data
     } catch (error) {
-      throw error.response?.data?.message || 'Failed to merge projects'
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to merge projects')
     }
   },
 
@@ -73,7 +111,7 @@ export const projectService = {
       const response = await api.post('/projects/clone', payload)
       return response.data
     } catch (error) {
-      throw error.response?.data?.message || 'Failed to clone project'
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to clone project')
     }
   },
 
@@ -86,7 +124,7 @@ export const projectService = {
       })
       return response.data
     } catch (error) {
-      throw error.response?.data?.message || 'Failed to create team'
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to create team')
     }
   },
 
@@ -99,7 +137,7 @@ export const projectService = {
       })
       return response.data
     } catch (error) {
-      throw error.response?.data?.message || 'Failed to add users'
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to add users')
     }
   },
 
@@ -114,7 +152,7 @@ export const projectService = {
       })
       return response.data
     } catch (error) {
-      throw error.response?.data?.message || 'Failed to allocate role'
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to allocate role')
     }
   },
 
@@ -131,7 +169,7 @@ export const projectService = {
       const response = await api.post('/projects/allocate_funds', payload)
       return response.data
     } catch (error) {
-      throw error.response?.data?.message || 'Failed to allocate funds'
+      throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to allocate funds')
     }
   }
 }

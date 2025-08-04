@@ -1,3 +1,4 @@
+// Frontend/website/src/views/Timetable.vue
 <template>
   <div class="timetable-page" :class="{ dark: isDark, light: !isDark }">
     <!-- Sidebar -->

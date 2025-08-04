@@ -25,9 +25,26 @@ export const useUserStore = defineStore('user', {
       try {
         const token = localStorage.getItem('access_token')
         const userData = JSON.parse(localStorage.getItem('user_data') || 'null')
+        
         if (token && userData) {
-          this.user = userData
-          this.isAuthenticated = true
+          // Verify user data has required fields
+          if (userData.username && userData.company_name) {
+            this.user = userData
+            this.isAuthenticated = true
+            console.log('Auth initialized with user:', userData) // Debug log
+          } else {
+            console.warn('Incomplete user data, attempting to restore from JWT')
+            // Try to get user data from authService (which will decode JWT)
+            const restoredUser = authService.getCurrentUser()
+            if (restoredUser && restoredUser.company_name) {
+              this.user = restoredUser
+              this.isAuthenticated = true
+              console.log('Auth restored from JWT:', restoredUser) // Debug log
+            } else {
+              console.warn('Failed to restore user data, clearing auth')
+              this.clearAuth()
+            }
+          }
         } else {
           this.clearAuth()
         }
@@ -45,17 +62,15 @@ export const useUserStore = defineStore('user', {
       try {
         const response = await authService.login(username, password)
 
-        // Update store state
+        // Update store state with validated user data
         this.user = {
-          username: username,
+          username: response.username || username,
           company_name: response.company_name,
           role: response.role
         }
         this.isAuthenticated = true
 
-        // Persist to localStorage
-        localStorage.setItem('access_token', response.access_token)
-        localStorage.setItem('user_data', JSON.stringify(this.user))
+        console.log('User store updated with:', this.user) // Debug log
 
         return response
       } catch (error) {
