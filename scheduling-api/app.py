@@ -2,17 +2,17 @@
 from datetime import datetime, timedelta
 import pytz
 import os
-import traceback
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from db import users_col, projects_col, tasks_col, ping as mongo_ping
+from auth_helpers import is_valid_email, normalize_email, create_user, check_password
 from validators import ProjectCreate, TaskCreate, BatchTaskCreate
 from createandget import create_project, create_project_update, create_task, create_task_update, fetch_priority, get_latest_progress, get_member_tasks, get_project_by_company_and_name, get_project_tasks, create_tasks_batch, get_task_by_name, get_project_by_name, get_task_state, projects_db, tasks_db, updates_db
 from helpers import format_duration, parse_duration, save_uploaded_file
 from views import generate_timetable, generate_gantt_chart
 from Projects.views import projects_bp
 from flask_jwt_extended import (
-    JWTManager, create_access_token, get_jwt, jwt_required,
-    get_jwt_identity
+    JWTManager, create_access_token, get_jwt, jwt_required
 )
 
 app = Flask(__name__)
@@ -151,7 +151,15 @@ def tasks_endpoint():
                         return jsonify({"error": f"Dependency task '{dep_name}' not found"}), 400
                     dependency_ids.append(dep_task['id'])
                 
+                members_list = []
+                for m in (task.members or []):
+                    m_norm = normalize_email(m)
+                    if not is_valid_email(m_norm):
+                        return jsonify({"error": f"Invalid member email in batch: {m}"}), 422
+                    members_list.append(m_norm)
+
                 task_dict = task.dict()
+                task_dict['members'] = members_list
                 task_dict['project_id'] = project['id']
                 task_dict['expected_duration'] = duration_min
                 task_dict['dependencies'] = dependency_ids
@@ -176,7 +184,15 @@ def tasks_endpoint():
     
     # Handle single task creation
     try:
+        # Log the incoming data for debugging
+        print(f"Incoming task data: {data}")
+    
+        # Ensure expected_duration is present
+        if 'expected_duration' not in data or data['expected_duration'] is None:
+            return jsonify({"error": "expected_duration is required"}), 400
+    
         task_data = TaskCreate(**data)
+        print(f"TaskCreate validation passed: {task_data}")
 
         # 1) Lookup project
         project = get_project_by_name(task_data.project_name)
@@ -216,13 +232,22 @@ def tasks_endpoint():
             dependency_ids.append(dep_task['id'])
 
         # 6) Create the task
+        # validate members are emails and normalized
+        if not isinstance(task_data.members, list):
+            return jsonify({"error":"members must be a list of emails"}), 422
+        invalid = [m for m in (task_data.members or []) if not is_valid_email(normalize_email(m))]
+        if invalid:
+            return jsonify({"error":"Invalid member emails", "invalid": invalid}), 422
+
+        members_clean = [normalize_email(m) for m in (task_data.members or [])]
+
         task = create_task(
             project_id=project['id'],
             name=task_data.task_name,
             start_time=start_time,
             expected_duration=duration_min,
             priority=task_data.priority,
-            members=task_data.members,
+            members=members_clean,
             estimated_cost=task_data.estimated_cost,
             description=task_data.description,
             dependencies=dependency_ids
@@ -233,7 +258,7 @@ def tasks_endpoint():
         # 7) Auto‑add members to the project’s team
         proj_rec = projects_db[project['id']]
         team = set(proj_rec.get('team', []))
-        team.update(task_data.members or [])
+        team.update(members_clean or [])
         proj_rec['team'] = list(team)
 
         # 8) Return
@@ -250,9 +275,9 @@ def tasks_endpoint():
             "task_id": task['id']
         }), 201
 
-    except Exception as e:
-        print(traceback.format_exc())
-        return jsonify({"error": f"Single task creation failed: {str(e)}"}), 400
+    except Exception as validation_error:
+        print(f"TaskCreate validation failed: {validation_error}")
+        return jsonify({"error": f"Validation error: {str(validation_error)}"}), 400
 
 @app.route('/tasks/updates', methods=['POST'])
 def create_task_update_endpoint():
@@ -677,64 +702,58 @@ def get_task_members_endpoint():
 app.config["JWT_SECRET_KEY"] = "your-secret-key"  # Change in production!
 jwt = JWTManager(app)
 
-# User storage (in production, use a database)
+
 users_db = {}
 
 @app.route('/register', methods=['POST'])
 def register():
-    data = request.json
+    data = request.json or {}
     required = ['company_name', 'username', 'password', 'role']
-    if not data or any(field not in data for field in required):
+    if any(field not in data for field in required):
         return jsonify({"error": "All fields are required"}), 400
-    
-    if data['username'] in users_db:
-        return jsonify({"error": "Username already exists"}), 400
-        
-    users_db[data['username']] = {
-        'company_name': data['company_name'],
-        'password': data['password'],  # In production, hash passwords!
-        'role': data['role'],
-        'username': data['username']
-    }
-    
-    return jsonify({
-        "message": "User registered successfully",
-        "username": data['username'],
-        "company_name": data['company_name'],
-        "role": data['role']
-    }), 201
+
+    username = normalize_email(data['username'])
+    if not is_valid_email(username):
+        return jsonify({"error": "username must be a valid email address"}), 422
+
+    try:
+        user = create_user(username, data['password'], data['company_name'], data['role'])
+        return jsonify({
+            "message": "User registered successfully",
+            "username": user['username'],
+            "company_name": user['company_name'],
+            "role": user['role']
+        }), 201
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        return jsonify({"error": "Server error: " + str(e)}), 500
+
 
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.json
-    if not data or 'username' not in data or 'password' not in data:
+    data = request.json or {}
+    if 'username' not in data or 'password' not in data:
         return jsonify({"error": "Username and password required"}), 400
-    
-    user = users_db.get(data['username'])
-    if not user or user['password'] != data['password']:
+
+    username = normalize_email(data['username'])
+    user_doc = users_col.find_one({"username": username})
+    if not user_doc or not check_password(data['password'], user_doc['password']):
         return jsonify({"error": "Invalid credentials"}), 401
-    
-    print(f"Login successful for user: {user['username']}, company: {user['company_name']}")  # Debug log
-    
-    # Create JWT token
+
     access_token = create_access_token(
-        identity=user['username'],
+        identity=user_doc['username'],
         additional_claims={
-            'company_name': user['company_name'],
-            'role': user['role']
+            'company_name': user_doc.get('company_name'),
+            'role': user_doc.get('role')
         }
     )
-    
-    response_data = {
+    return jsonify({
         "access_token": access_token,
-        "username": user['username'],
-        "company_name": user['company_name'],
-        "role": user['role']
-    }
-    
-    print(f"Sending login response: {response_data}")  # Debug log
-    
-    return jsonify(response_data), 200
+        "username": user_doc['username'],
+        "company_name": user_doc.get('company_name'),
+        "role": user_doc.get('role')
+    }), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)

@@ -356,23 +356,26 @@ def restore():
         }
     }), 200
 
-@projects_bp.route('/create_team', methods=['POST'])
-def create_team():
+@projects_bp.route('/add_objective', methods=['POST'])
+def add_objective():    
     data = request.json or {}
     company = data.get('company_name')
     proj_name = data.get('project_name')
-    members = data.get('team', [])
-    if not company or not proj_name or not isinstance(members, list):
-        return jsonify({"error": "company_name, project_name, and team list required"}), 400
+    objective = data.get('objective')
+    if not company or not proj_name or not objective:
+        return jsonify({"error": "company_name, project_name and objective required"}), 400
+
     proj = get_project_by_company_and_name(company, proj_name)
     if not proj:
         return jsonify({"error": "Project not found"}), 404
-    # Set team membership
-    proj['team'] = members
-    return jsonify({
-        "message": f"Team set for project '{proj_name}'",
-        "team": proj['team']
-    }), 200
+
+    # Ensure objectives list exists
+    if 'objectives' not in proj:
+        proj['objectives'] = []
+    
+    proj['objectives'].append(objective)
+    create_project_update(proj['id'], f"Objective added: {objective}")
+    return jsonify({"message": "Objective added", "project": proj}), 200
 
 @projects_bp.route('/add_users', methods=['POST'])
 def add_users():
@@ -480,3 +483,34 @@ def allocate_funds():
     entry = {"amount": amount, "member": member, "task_name": task_name}
     fa.append(entry)
     return jsonify({"message": "Funds allocated", "fund_allocations": fa}), 200
+
+
+@projects_bp.route('/create_team', methods=['POST'])
+def create_team():
+    data = request.json or {}
+    company = data.get('company_name')
+    proj_name = data.get('project_name')
+
+    members = data.get('team', data.get('members', []))
+    if not company or not proj_name or not isinstance(members, list):
+        return jsonify({"error": "company_name, project_name, and team list required"}), 400
+    proj = get_project_by_company_and_name(company, proj_name)
+    if not proj:
+        return jsonify({"error": "Project not found"}), 404
+    # validate and normalize emails
+    cleaned = []
+    invalid = []
+    from auth_helpers import is_valid_email, normalize_email
+    for m in members:
+        norm = normalize_email(m)
+        if not is_valid_email(norm):
+            invalid.append(m)
+        else:
+            cleaned.append(norm)
+    if invalid:
+        return jsonify({"error": "Invalid member emails", "invalid": invalid}), 422
+    proj['team'] = list(dict.fromkeys(cleaned))  # unique, preserve order
+    return jsonify({
+        "message": f"Team set for project '{proj_name}'",
+        "team": proj['team']
+    }), 200

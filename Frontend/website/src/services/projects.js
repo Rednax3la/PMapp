@@ -5,6 +5,12 @@ export const projectService = {
   async createProject(projectData) {
     try {
       console.log('Sending project data to backend:', projectData)
+      if (projectData.start_date) {
+        const date = new Date(projectData.start_date)
+        if (!isNaN(date.getTime())) {
+          projectData.start_date = date.toISOString().split('T')[0]
+        }
+      }
       const response = await api.post('/projects', projectData)
       console.log('Backend response:', response.data)
       return response.data

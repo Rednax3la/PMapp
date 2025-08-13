@@ -81,9 +81,26 @@ export default {
   },
   emits: ['close'],
   setup() {
-    const formatDateRange = (start, end) => {
-      return `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`;
-    };
+    const formatDateRange = (startDate, endDate) => {
+      try {
+      // Handle string dates that might be invalid
+      const start = startDate ? new Date(startDate) : null;
+      const end = endDate ? new Date(endDate) : null;
+    
+      // Check if dates are valid
+      if (!start || isNaN(start.getTime())) {
+        return 'Invalid start date';
+      }
+      if (!end || isNaN(end.getTime())) {
+        return 'Invalid end date';
+      }
+    
+      return `${format(start, 'MMM dd, yyyy')} - ${format(end, 'MMM dd, yyyy')}`;
+    } catch (error) {
+      console.error('Date formatting error:', error);
+      return 'Invalid date range';
+    }
+  }
 
     return { formatDateRange };
   }

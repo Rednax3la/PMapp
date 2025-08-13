@@ -22,7 +22,14 @@
 
         <div class="form-group">
           <label>Duration (hours) *</label>
-          <input v-model="taskData.duration" type="number" min="1" required />
+          <input
+            v-model="taskData.expected_duration"
+            type="number"
+            min="0.5"
+            step="0.5"
+            required
+            placeholder="e.g., 8.5 hours"
+          />
         </div>
 
         <div class="form-group">
@@ -50,8 +57,8 @@
           <div class="tag-input">
             <input 
               v-model="memberInput" 
-              type="text" 
-              placeholder="Enter member and press Enter"
+              type="email" 
+              placeholder="member@example.com and press Enter"
               @keyup.enter="addMember"
             />
             <div class="tags">
@@ -108,7 +115,7 @@
 <script>
 import AppButton from '@/components/ui/AppButton.vue'
 import { taskService } from '@/services/tasks'
-import { authService } from '@/services/auth'
+import { useUserStore } from '@/store/user'
 
 export default {
   name: 'CreateTaskModal',
@@ -123,7 +130,7 @@ export default {
       taskData: {
         project_name: '',
         task_name: '',
-        duration: 1,
+        expected_duration: null,
         start_time: '',
         priority: 'medium',
         description: '',
@@ -135,8 +142,15 @@ export default {
   },
   methods: {
     addMember() {
-      const m = this.memberInput.trim()
-      if (m && !this.taskData.members.includes(m)) {
+      const m = this.memberInput.trim().toLowerCase()
+      const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!m) return
+      if (!emailRe.test(m)) {
+        alert('Enter a valid email address for members')
+        this.memberInput = ''
+        return
+      }
+      if (!this.taskData.members.includes(m)) {
         this.taskData.members.push(m)
       }
       this.memberInput = ''
@@ -152,21 +166,39 @@ export default {
     removeDependency(i) { this.taskData.dependencies.splice(i,1) },
 
     async createTask() {
-      this.loading = true
       try {
-        const user = authService.getCurrentUser()
-        const payload = {
-          ...this.taskData,
-          company_name: user.company_name,
-          start_time: this.taskData.start_time 
-            ? new Date(this.taskData.start_time).toISOString() 
-            : undefined
+        this.loading = true
+    
+        // Validate required fields
+        if (!this.taskData.task_name || !this.taskData.project_name || !this.taskData.expected_duration) {
+          throw new Error('Please fill in all required fields')
         }
-        const res = await taskService.createTask(payload)
-        this.$emit('task-created', res)
-        this.$emit('close')
-      } catch (e) {
-        alert('Failed to create task: '+e)
+    
+        // Ensure expected_duration is a number
+        this.taskData.expected_duration = parseFloat(this.taskData.expected_duration)
+    
+        // Get current user data
+        const userData = useUserStore.currentUser
+        if (!userData || !userData.company_name) {
+          throw new Error('User data not available')
+        }
+    
+        // Prepare task data
+        const taskPayload = {
+          ...this.taskData,
+          company_name: userData.company_name
+        }
+    
+        console.log('Creating task with payload:', taskPayload)
+    
+        const result = await taskService.createTask(taskPayload)
+    
+        this.$emit('task-created', result)
+        this.closeModal()
+    
+      } catch (error) {
+        console.error('Task creation error:', error)
+        this.error = error.message || 'Failed to create task'
       } finally {
         this.loading = false
       }

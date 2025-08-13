@@ -35,9 +35,9 @@
           <input 
             id="login-username"
             v-model="loginForm.username" 
-            type="text" 
+            type="email" 
             required 
-            placeholder="Enter your username"
+            placeholder="Enter your email"
             :disabled="loading"
           />
         </div>
@@ -91,9 +91,9 @@
           <input 
             id="register-username"
             v-model="registerForm.username" 
-            type="text" 
+            type="email" 
             required 
-            placeholder="Choose a username"
+            placeholder="your@company.com"
             :disabled="loading"
           />
         </div>
@@ -224,7 +224,18 @@ export default {
     }
   },
   methods: {
+
+    isEmail(str) {
+      const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      return re.test(str)
+    },
+
     async handleLogin() {
+      if (!this.isEmail(this.loginForm.username)) {
+        this.error = 'Please enter a valid email address'
+        return
+      }
+      this.loginForm.username = this.loginForm.username.trim().toLowerCase()
       this.loading = true
       this.error = null
       this.success = null
@@ -247,6 +258,11 @@ export default {
     },
 
     async handleRegister() {
+      if (!this.isEmail(this.registerForm.username)) {
+        this.error = 'Please enter a valid email address'
+        return
+      }
+      this.loginForm.username = this.registerForm.username.trim().toLowerCase()
       this.loading = true
       this.error = null
       this.success = null
