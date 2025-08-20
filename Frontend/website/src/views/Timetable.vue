@@ -2,357 +2,147 @@
 <template>
   <div class="timetable-page" :class="{ dark: isDark, light: !isDark }">
     <!-- Sidebar -->
-    <Sidebar :active-nav="activeNav" @nav-change="setActiveNav" />
-    
+    <Sidebar :active-nav="'timetable'" />
+
     <!-- Main Content -->
     <div class="main-content">
       <AppHeader title="Timetable">
         <template #actions>
           <ThemeToggle :is-dark="isDark" @toggle="toggleTheme" />
-          <AppButton variant="primary" icon="fas fa-plus">
-            Add Event
-          </AppButton>
-          <AppButton variant="secondary" icon="fas fa-calendar-alt">
-            View Calendar
-          </AppButton>
+          <AppButton @click="goToToday">Today</AppButton>
+          <AppButton @click="prevPeriod">Prev</AppButton>
+          <AppButton @click="nextPeriod">Next</AppButton>
+          <AppButton @click="setView('Week')">Week</AppButton>
+          <AppButton @click="setView('Month')">Month</AppButton>
+          <select v-model="selectedProject" @change="onProjectChange" class="ml-2 p-1 border rounded">
+            <option value="">All Projects</option>
+            <option v-for="p in projects" :key="p.id" :value="p.name">{{ p.name }}</option>
+          </select>
         </template>
       </AppHeader>
-      
-      <!-- Timetable Controls -->
-      <div class="timetable-controls">
-        <div class="control-group">
-          <select v-model="selectedProject" @change="loadTimetableData" class="control-select">
-            <option value="">Select Project</option>
-            <option v-for="project in projects" :key="project.id" :value="project.name">
-              {{ project.name }}
-            </option>
-          </select>
-          
-          <div class="view-toggle">
-            <button 
-              v-for="view in viewTypes" 
-              :key="view" 
-              :class="['toggle-btn', { active: currentView === view }]"
-              @click="currentView = view"
-            >
-              {{ view }}
-            </button>
-          </div>
-        </div>
-        
-        <div class="navigation-controls">
-          <div class="week-navigation">
-            <AppButton @click="previousPeriod" variant="outline" class="nav-btn">
-              <i class="fas fa-chevron-left"></i>
-            </AppButton>
-            <div class="current-period">
-              <h3>{{ currentPeriodLabel }}</h3>
-              <span class="period-subtitle">{{ periodSubtitle }}</span>
-            </div>
-            <AppButton @click="nextPeriod" variant="outline" class="nav-btn">
-              <i class="fas fa-chevron-right"></i>
-            </AppButton>
-          </div>
-          
-          <AppButton @click="goToToday" variant="primary" class="today-btn">
-            <i class="fas fa-calendar-day"></i>
-            Today
-          </AppButton>
-        </div>
-      </div>
-      
-      <!-- Loading State -->
-      <div v-if="loading" class="state-card loading">
-        <div class="state-content">
-          <i class="fas fa-spinner fa-spin state-icon"></i>
-          <p>Loading timetable...</p>
-        </div>
-      </div>
 
-      <!-- Error State -->
-      <div v-if="error && !loading" class="state-card error">
-        <div class="state-content">
-          <i class="fas fa-exclamation-triangle state-icon"></i>
-          <p>{{ error }}</p>
-          <AppButton @click="loadTimetableData" variant="primary" class="btn-sm">
-            Retry
-          </AppButton>
-        </div>
-      </div>
-
-      <!-- Timetable Grid -->
-      <div v-if="!loading && !error && selectedProject" class="timetable-container">
-        <!-- Week View -->
-        <div v-if="currentView === 'Week'" class="week-view">
-          <div class="week-header">
-            <div class="time-column">
-              <div class="time-label">Time</div>
-            </div>
-            <div 
-              v-for="day in weekDays" 
-              :key="day.dateKey" 
-              class="day-header"
-              :class="{ 
-                today: isToday(day.date),
-                weekend: isWeekend(day.date)
-              }"
-            >
-              <div class="day-info">
-                <div class="day-name">{{ day.name }}</div>
-                <div class="day-number">{{ day.number }}</div>
-                <div class="day-date">{{ day.month }}</div>
-              </div>
-              <div class="day-stats">
-                <span class="event-count">{{ getEventsForDate(day.date).length }} events</span>
+      <div class="timetable-container">
+        <!-- Week view -->
+        <div v-if="currentView === 'Week'" class="week-grid">
+          <!-- Time column -->
+          <div class="time-slots">
+            <div v-for="h in hours()" :key="'time-' + h" class="time-slot">
+              <div class="time-display">
+                <span class="hour">{{ h === 0 ? 12 : h > 12 ? h - 12 : h }}</span>
+                <span class="period">{{ h < 12 ? 'AM' : 'PM' }}</span>
               </div>
             </div>
           </div>
-          
-          <div class="week-grid" ref="weekGrid">
-            <div class="time-slots">
-              <div 
-                v-for="hour in timeSlots" 
-                :key="hour" 
-                class="time-slot"
-                :class="{ current: isCurrentHour(hour) }"
+
+          <!-- Day columns -->
+          <div class="days-grid">
+            <div
+              v-for="day in visibleDays"
+              :key="'week-' + day"
+              class="day-column"
+              :class="{ today: isSameDay(day, now) }"
+            >
+              <div
+                v-for="h in hours()"
+                :key="day + '-' + h"
+                class="hour-slot"
               >
-                <div class="time-display">
-                  <span class="hour">{{ formatHour(hour) }}</span>
-                  <span class="period">{{ formatPeriod(hour) }}</span>
-                </div>
-              </div>
-            </div>
-            
-            <div class="days-grid">
-              <div 
-                v-for="day in weekDays" 
-                :key="day.dateKey" 
-                class="day-column"
-                :class="{ 
-                  today: isToday(day.date),
-                  weekend: isWeekend(day.date)
-                }"
-              >
-                <div 
-                  v-for="hour in timeSlots" 
-                  :key="`${day.dateKey}-${hour}`" 
-                  class="hour-slot"
-                  :class="{ current: isToday(day.date) && isCurrentHour(hour) }"
-                  @click="createEvent(day.date, hour)"
+                <div
+                  v-for="ev in getEventsForSlot(day, h)"
+                  :key="ev.id"
+                  class="event-block"
+                  :class="['event-' + (ev.type || 'task')]"
+                  :style="{ height: (ev.duration/60) * 80 + 'px' }"
+                  @mouseenter="showTooltip(ev, $event)"
+                  @mouseleave="hideTooltip"
+                  @click="selectedEvent = ev"
                 >
-                  <div 
-                    v-for="event in getEventsForSlot(day.date, hour)" 
-                    :key="event.id" 
-                    class="event-block"
-                    :class="[getEventTypeClass(event), { selected: selectedEvent?.id === event.id }]"
-                    :style="getEventStyle(event)"
-                    @click.stop="selectEvent(event)"
-                    @mouseover="showEventTooltip(event, $event)"
-                    @mouseleave="hideEventTooltip"
-                  >
-                    <div class="event-content">
-                      <div class="event-title">{{ event.title }}</div>
-                      <div class="event-time">{{ event.time }}</div>
-                      <div class="event-attendees" v-if="event.attendees?.length">
-                        <i class="fas fa-users"></i>
-                        {{ event.attendees.length }}
-                      </div>
+                  <div class="event-content">
+                    <div class="event-title">{{ ev.title }}</div>
+                    <div class="event-time">{{ formatTimeRange(ev) }}</div>
+                    <div class="event-attendees" v-if="ev.members?.length">
+                      <span v-for="m in ev.members" :key="m" class="attendee-chip">{{ m }}</span>
                     </div>
-                    <div class="event-priority" :class="`priority-${event.priority}`"></div>
+                    <div class="event-progress">
+                      <div
+                        class="event-priority"
+                        :class="{
+                          'priority-high': ev.priority === 'high',
+                          'priority-medium': ev.priority === 'medium',
+                          'priority-low': ev.priority === 'low'
+                        }"
+                      ></div>
+                    </div>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-        
-        <!-- Month View -->
-        <div v-if="currentView === 'Month'" class="month-view">
-          <div class="month-header">
-            <div v-for="day in dayNames" :key="day" class="month-day-header">
-              {{ day }}
+
+        <!-- Month view -->
+        <div v-else class="month-grid">
+          <div
+            v-for="day in visibleDays"
+            :key="'month-' + day"
+            class="month-cell"
+            :class="{
+              today: isSameDay(day, now),
+              weekend: [0,6].includes(day.getDay()),
+              'has-events': eventsForDate(day).length
+            }"
+          >
+            <div class="cell-header">
+              <span class="cell-date">{{ format(day, 'd') }}</span>
+              <span v-if="eventsForDate(day).length" class="cell-event-count">{{ eventsForDate(day).length }}</span>
             </div>
-          </div>
-          
-          <div class="month-grid">
-            <div 
-              v-for="date in monthDates" 
-              :key="date.dateKey" 
-              class="month-cell"
-              :class="{ 
-                'other-month': !date.currentMonth,
-                'today': isToday(date.date),
-                'weekend': isWeekend(date.date),
-                'selected': selectedDate && date.dateKey === formatDateKey(selectedDate),
-                'has-events': getEventsForDate(date.date).length > 0
-              }"
-              @click="selectDate(date.date)"
-            >
-              <div class="cell-header">
-                <span class="cell-date">{{ date.day }}</span>
-                <span class="cell-event-count" v-if="getEventsForDate(date.date).length > 0">
-                  {{ getEventsForDate(date.date).length }}
-                </span>
+            <div class="cell-events">
+              <div
+                v-for="ev in eventsForDate(day).slice(0,3)"
+                :key="ev.id"
+                class="month-event"
+                @mouseenter="showTooltip(ev, $event)"
+                @mouseleave="hideTooltip"
+                @click="selectedEvent = ev"
+              >
+                <span class="event-dot" :class="'priority-' + (ev.priority || 'low')"></span>
+                <span class="event-text">{{ ev.title }}</span>
               </div>
-              <div class="cell-events">
-                <div 
-                  v-for="(event) in getEventsForDate(date.date).slice(0, 3)" 
-                  :key="event.id" 
-                  class="month-event"
-                  :class="getEventTypeClass(event)"
-                  @click.stop="selectEvent(event)"
-                >
-                  <div class="event-dot" :style="{ background: getEventColor(event) }"></div>
-                  <span class="event-text">{{ event.title }}</span>
-                </div>
-                <div 
-                  v-if="getEventsForDate(date.date).length > 3" 
-                  class="more-events"
-                  @click.stop="showMoreEvents(date.date)"
-                >
-                  +{{ getEventsForDate(date.date).length - 3 }} more
-                </div>
+              <div v-if="eventsForDate(day).length > 3" class="more-events">
+                +{{ eventsForDate(day).length - 3 }} more
               </div>
             </div>
           </div>
         </div>
-
-        <!-- Current Time Indicator -->
-        <div 
-          v-if="currentView === 'Week' && showCurrentTimeIndicator" 
-          class="current-time-line" 
-          :style="getCurrentTimeStyle()"
-        ></div>
       </div>
 
-      <!-- No Project Selected -->
-      <div v-if="!loading && !error && !selectedProject" class="state-card empty">
-        <div class="state-content">
-          <i class="fas fa-calendar-alt state-icon"></i>
-          <h3>No Project Selected</h3>
-          <p>Select a project from the dropdown to view its timetable and events.</p>
+      <!-- Tooltip -->
+      <div
+        v-if="tooltipEvent"
+        class="event-tooltip"
+        :style="tooltipStyle"
+      >
+        <div class="tooltip-title">{{ tooltipEvent.title }}</div>
+        <div class="tooltip-time">{{ formatTimeRange(tooltipEvent) }}</div>
+        <div v-if="tooltipEvent.members?.length" class="tooltip-members">
+          <span v-for="m in tooltipEvent.members" :key="m" class="attendee-chip">{{ m }}</span>
         </div>
+        <StateBadge :state="tooltipEvent.state" />
       </div>
-      
-      <!-- Event Details Modal -->
+
+      <!-- Event Modal -->
       <div v-if="selectedEvent" class="modal-overlay" @click.self="selectedEvent = null">
         <div class="event-modal">
-          <div class="modal-header">
-            <div class="event-header-info">
-              <h3>{{ selectedEvent.title }}</h3>
-              <div class="event-type-badge" :class="getEventTypeClass(selectedEvent)">
-                {{ selectedEvent.type }}
-              </div>
-            </div>
-            <button class="close-btn" @click="selectedEvent = null">
-              <i class="fas fa-times"></i>
-            </button>
-          </div>
-          
-          <div class="modal-body">
-            <div class="event-details-grid">
-              <div class="detail-card">
-                <div class="detail-icon">
-                  <i class="fas fa-clock"></i>
-                </div>
-                <div class="detail-content">
-                  <span class="detail-label">Time</span>
-                  <span class="detail-value">{{ selectedEvent.time }} - {{ selectedEvent.endTime }}</span>
-                </div>
-              </div>
-              
-              <div class="detail-card">
-                <div class="detail-icon">
-                  <i class="fas fa-calendar"></i>
-                </div>
-                <div class="detail-content">
-                  <span class="detail-label">Date</span>
-                  <span class="detail-value">{{ formatEventDate(selectedEvent.date) }}</span>
-                </div>
-              </div>
-              
-              <div class="detail-card">
-                <div class="detail-icon">
-                  <i class="fas fa-project-diagram"></i>
-                </div>
-                <div class="detail-content">
-                  <span class="detail-label">Project</span>
-                  <span class="detail-value">{{ selectedEvent.project }}</span>
-                </div>
-              </div>
-              
-              <div class="detail-card" v-if="selectedEvent.location">
-                <div class="detail-icon">
-                  <i class="fas fa-map-marker-alt"></i>
-                </div>
-                <div class="detail-content">
-                  <span class="detail-label">Location</span>
-                  <span class="detail-value">{{ selectedEvent.location }}</span>
-                </div>
-              </div>
-            </div>
-            
-            <div class="event-description" v-if="selectedEvent.description">
-              <h4>Description</h4>
-              <p>{{ selectedEvent.description }}</p>
-            </div>
-            
-            <div class="event-attendees" v-if="selectedEvent.attendees?.length">
-              <h4>Attendees ({{ selectedEvent.attendees.length }})</h4>
-              <div class="attendees-list">
-                <div 
-                  v-for="attendee in selectedEvent.attendees" 
-                  :key="attendee" 
-                  class="attendee-chip"
-                >
-                  <i class="fas fa-user"></i>
-                  {{ attendee }}
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          <div class="modal-footer">
-            <AppButton variant="outline" @click="selectedEvent = null">
-              Close
-            </AppButton>
-            <div class="action-buttons">
-              <AppButton variant="secondary" @click="editEvent">
-                <i class="fas fa-edit"></i>
-                Edit
-              </AppButton>
-              <AppButton variant="danger" @click="deleteEvent">
-                <i class="fas fa-trash"></i>
-                Delete
-              </AppButton>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Event Tooltip -->
-      <div 
-        v-if="tooltipEvent" 
-        class="event-tooltip" 
-        :style="tooltipStyle"
-        ref="tooltip"
-      >
-        <div class="tooltip-header">
-          <h4>{{ tooltipEvent.title }}</h4>
-          <span class="tooltip-time">{{ tooltipEvent.time }}</span>
-        </div>
-        <div class="tooltip-body">
-          <div class="tooltip-row" v-if="tooltipEvent.location">
-            <i class="fas fa-map-marker-alt"></i>
-            <span>{{ tooltipEvent.location }}</span>
-          </div>
-          <div class="tooltip-row" v-if="tooltipEvent.attendees?.length">
-            <i class="fas fa-users"></i>
-            <span>{{ tooltipEvent.attendees.length }} attendees</span>
-          </div>
-          <div class="tooltip-row">
-            <i class="fas fa-tag"></i>
-            <span>{{ tooltipEvent.type }}</span>
+          <h3 class="modal-title">{{ selectedEvent.title }}</h3>
+          <p><strong>Project:</strong> {{ selectedEvent.project }}</p>
+          <p><strong>Time:</strong> {{ formatTimeRange(selectedEvent) }}</p>
+          <p><strong>Status:</strong> <StateBadge :state="selectedEvent.state" /></p>
+          <p v-if="selectedEvent.members?.length"><strong>Members:</strong>
+            <span v-for="m in selectedEvent.members" :key="m" class="attendee-chip">{{ m }}</span>
+          </p>
+          <div class="modal-actions">
+            <AppButton @click="markTaskAs(selectedEvent, 'complete')">Mark Complete</AppButton>
+            <AppButton @click="selectedEvent = null">Close</AppButton>
           </div>
         </div>
       </div>
@@ -361,492 +151,304 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import { 
-  format, 
-  startOfWeek, 
-  endOfWeek, 
-  addDays, 
-  addWeeks, 
-  addMonths,
+import {
+  format,
+  startOfWeek,
+  endOfWeek,
   startOfMonth,
   endOfMonth,
+  addDays,
+  addWeeks,
+  addMonths,
+  parseISO,
   isSameDay,
-  isToday as checkIsToday,
-  isWeekend as checkIsWeekend,
-  getHours,
-  getMinutes
-} from 'date-fns';
-import Sidebar from '@/components/layout/Sidebar.vue';
-import AppHeader from '@/components/layout/AppHeader.vue';
-import ThemeToggle from '@/components/layout/ThemeToggle.vue';
-import AppButton from '@/components/ui/AppButton.vue';
+  addMinutes,
+  addHours,
+  startOfDay,
+  isWithinInterval,
+  differenceInMinutes
+} from 'date-fns'
+
+import Sidebar from '@/components/layout/Sidebar.vue'
+import AppHeader from '@/components/layout/AppHeader.vue'
+import ThemeToggle from '@/components/layout/ThemeToggle.vue'
+import AppButton from '@/components/ui/AppButton.vue'
+import StateBadge from '@/components/ui/StateBadge.vue'
+
+import { visualizationService } from '@/services/visualizations'
+import { projectService } from '@/services/projects'
+import { taskService } from '@/services/tasks'
+import { authService } from '@/services/auth'
+import { useUserStore } from '@/store/user'
 
 export default {
   name: 'TimetablePage',
-  components: {
-    Sidebar,
-    AppHeader,
-    ThemeToggle,
-    AppButton
-  },
-  setup() {
-    // Theme Management
-    const isDark = ref(true);
-    const toggleTheme = () => {
-      isDark.value = !isDark.value;
-      localStorage.setItem("zainpm-theme", isDark.value ? "dark" : "light");
-    };
+  components: { Sidebar, AppHeader, ThemeToggle, AppButton, StateBadge },
 
-    // Navigation
-    const activeNav = ref('timetable');
-    const setActiveNav = (target) => {
-      activeNav.value = target;
-    };
-
-    // Timetable State
-    const currentView = ref('Week');
-    const viewTypes = ref(['Week', 'Month']);
-    const currentDate = ref(new Date());
-    const selectedDate = ref(null);
-    const selectedEvent = ref(null);
-    const selectedProject = ref('');
-    const loading = ref(false);
-    const error = ref(null);
-
-    // Tooltip
-    const tooltipEvent = ref(null);
-    const tooltipStyle = ref({});
-
-    // Current time tracking
-    const currentTime = ref(new Date());
-    let timeInterval = null;
-
-    // Sample Projects
-    const projects = ref([
-      { id: 1, name: 'Website Redesign' },
-      { id: 2, name: 'Mobile App Development' },
-      { id: 3, name: 'Marketing Campaign' },
-      { id: 4, name: 'Backend Infrastructure' }
-    ]);
-
-    // Events Data
-    const events = ref([
-      {
-        id: 1,
-        title: 'Daily Standup',
-        description: 'Daily team synchronization meeting to discuss progress and blockers',
-        date: new Date(),
-        time: '09:00',
-        endTime: '09:30',
-        hour: 9,
-        project: 'Website Redesign',
-        type: 'Meeting',
-        priority: 'high',
-        location: 'Conference Room A',
-        attendees: ['Sarah Johnson', 'Michael Chen', 'David Kim', 'Emma Rodriguez'],
-        color: '#00fff7'
-      },
-      {
-        id: 2,
-        title: 'Design Review Session',
-        description: 'Review latest UI/UX designs and provide feedback',
-        date: new Date(),
-        time: '14:00',
-        endTime: '15:30',
-        hour: 14,
-        project: 'Website Redesign',
-        type: 'Review',
-        priority: 'medium',
-        location: 'Design Studio',
-        attendees: ['Sarah Johnson', 'Emma Rodriguez'],
-        color: '#00ffb3'
-      },
-      {
-        id: 3,
-        title: 'Client Presentation',
-        description: 'Present project progress and milestones to stakeholders',
-        date: addDays(new Date(), 1),
-        time: '10:00',
-        endTime: '11:30',
-        hour: 10,
-        project: 'Website Redesign',
-        type: 'Presentation',
-        priority: 'high',
-        location: 'Main Conference Room',
-        attendees: ['David Kim', 'Priya Patel', 'Client Team'],
-        color: '#ffb300'
-      },
-      {
-        id: 4,
-        title: 'Code Review',
-        description: 'Review backend API implementation and discuss improvements',
-        date: addDays(new Date(), 2),
-        time: '16:00',
-        endTime: '17:00',
-        hour: 16,
-        project: 'Website Redesign',
-        type: 'Review',
-        priority: 'medium',
-        location: 'Development Room',
-        attendees: ['Michael Chen', 'David Kim'],
-        color: '#00e0ff'
-      },
-      {
-        id: 5,
-        title: 'Sprint Planning',
-        description: 'Plan tasks and user stories for the upcoming development sprint',
-        date: addDays(new Date(), 3),
-        time: '13:00',
-        endTime: '15:00',
-        hour: 13,
-        project: 'Website Redesign',
-        type: 'Planning',
-        priority: 'high',
-        location: 'Team Room',
-        attendees: ['All Team Members'],
-        color: '#ff0066'
-      }
-    ]);
-
-    // Computed Properties
-    const currentPeriodLabel = computed(() => {
-      if (currentView.value === 'Week') {
-        const start = startOfWeek(currentDate.value);
-        const end = endOfWeek(currentDate.value);
-        return `${format(start, 'MMM d')} - ${format(end, 'MMM d, yyyy')}`;
-      } else {
-        return format(currentDate.value, 'MMMM yyyy');
-      }
-    });
-
-    const periodSubtitle = computed(() => {
-      if (currentView.value === 'Week') {
-        return 'Weekly Schedule';
-      } else {
-        return 'Monthly Overview';
-      }
-    });
-
-    const weekDays = computed(() => {
-      const start = startOfWeek(currentDate.value);
-      const days = [];
-      for (let i = 0; i < 7; i++) {
-        const day = addDays(start, i);
-        days.push({
-          date: day,
-          name: format(day, 'EEE'),
-          number: format(day, 'd'),
-          month: format(day, 'MMM'),
-          dateKey: format(day, 'yyyy-MM-dd')
-        });
-      }
-      return days;
-    });
-
-    const monthDates = computed(() => {
-      const start = startOfMonth(currentDate.value);
-      const end = endOfMonth(currentDate.value);
-      const firstWeekStart = startOfWeek(start);
-      const lastWeekEnd = endOfWeek(end);
-      
-      const dates = [];
-      let current = firstWeekStart;
-      
-      while (current <= lastWeekEnd) {
-        dates.push({
-          date: current,
-          day: format(current, 'd'),
-          dateKey: format(current, 'yyyy-MM-dd'),
-          currentMonth: current.getMonth() === currentDate.value.getMonth()
-        });
-        current = addDays(current, 1);
-      }
-      
-      return dates;
-    });
-
-    const timeSlots = computed(() => {
-      const slots = [];
-      for (let hour = 6; hour <= 22; hour++) {
-        slots.push(hour);
-      }
-      return slots;
-    });
-
-    const dayNames = ref(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
-
-    const showCurrentTimeIndicator = computed(() => {
-      const today = new Date();
-      return weekDays.value.some(day => isSameDay(day.date, today));
-    });
-
-    // Helper Functions
-    const isToday = (date) => {
-      return checkIsToday(date);
-    };
-
-    const isWeekend = (date) => {
-      return checkIsWeekend(date);
-    };
-
-    const isCurrentHour = (hour) => {
-      const now = new Date();
-      return isToday(now) && getHours(now) === hour;
-    };
-
-    const formatHour = (hour) => {
-      return format(new Date().setHours(hour, 0, 0, 0), 'h');
-    };
-
-    const formatPeriod = (hour) => {
-      return format(new Date().setHours(hour, 0, 0, 0), 'a');
-    };
-
-    const formatDateKey = (date) => {
-      return format(date, 'yyyy-MM-dd');
-    };
-
-    const formatEventDate = (date) => {
-      return format(date, 'EEEE, MMMM d, yyyy');
-    };
-
-    const getEventsForSlot = (date, hour) => {
-      if (!selectedProject.value) return [];
-      return events.value.filter(event => 
-        event.project === selectedProject.value &&
-        isSameDay(event.date, date) && 
-        event.hour === hour
-      );
-    };
-
-    const getEventsForDate = (date) => {
-      if (!selectedProject.value) return [];
-      return events.value.filter(event => 
-        event.project === selectedProject.value &&
-        isSameDay(event.date, date)
-      );
-    };
-
-    const getEventTypeClass = (event) => {
-      return `event-${event.type.toLowerCase()}`;
-    };
-
-    const getEventStyle = (event) => {
-      return {
-        background: `linear-gradient(135deg, ${event.color}, ${event.color}CC)`
-      };
-    };
-
-    const getEventColor = (event) => {
-      return event.color;
-    };
-
-    const getCurrentTimeStyle = () => {
-      const now = new Date();
-      const currentHour = getHours(now);
-      const currentMinutes = getMinutes(now);
-      
-      // Find the current hour in timeSlots
-      const hourIndex = timeSlots.value.indexOf(currentHour);
-      if (hourIndex === -1) return { display: 'none' };
-      
-      // Calculate position
-      const slotHeight = 80; // Height of each hour slot
-      const headerHeight = 100; // Height of the header
-      const minuteOffset = (currentMinutes / 60) * slotHeight;
-      const topPosition = headerHeight + (hourIndex * slotHeight) + minuteOffset;
-      
-      return {
-        top: `${topPosition}px`,
-        left: '80px', // Width of time column
-        right: '0',
-        position: 'absolute',
-        height: '2px',
-        background: '#ff0066',
-        zIndex: 100,
-        boxShadow: '0 0 10px rgba(255, 0, 102, 0.5)'
-      };
-    };
-
-    // Navigation Functions
-    const previousPeriod = () => {
-      if (currentView.value === 'Week') {
-        currentDate.value = addWeeks(currentDate.value, -1);
-      } else {
-        currentDate.value = addMonths(currentDate.value, -1);
-      }
-    };
-
-    const nextPeriod = () => {
-      if (currentView.value === 'Week') {
-        currentDate.value = addWeeks(currentDate.value, 1);
-      } else {
-        currentDate.value = addMonths(currentDate.value, 1);
-      }
-    };
-
-    const goToToday = () => {
-      currentDate.value = new Date();
-    };
-
-    // Event Functions
-    const selectDate = (date) => {
-      selectedDate.value = selectedDate.value && isSameDay(selectedDate.value, date) ? null : date;
-    };
-
-    const selectEvent = (event) => {
-      selectedEvent.value = event;
-    };
-
-    const createEvent = (date, hour) => {
-      console.log('Creating event for:', format(date, 'yyyy-MM-dd'), hour);
-      // Implementation for creating new event
-    };
-
-    const editEvent = () => {
-      console.log('Editing event:', selectedEvent.value);
-      selectedEvent.value = null;
-    };
-
-    const deleteEvent = () => {
-      if (confirm('Are you sure you want to delete this event?')) {
-        const eventIndex = events.value.findIndex(e => e.id === selectedEvent.value.id);
-        if (eventIndex > -1) {
-          events.value.splice(eventIndex, 1);
-        }
-        selectedEvent.value = null;
-      }
-    };
-
-    const showMoreEvents = (date) => {
-      console.log('Showing more events for:', format(date, 'yyyy-MM-dd'));
-      // Implementation for showing more events modal
-    };
-
-    const showEventTooltip = (event, mouseEvent) => {
-      tooltipEvent.value = event;
-      const rect = mouseEvent.target.getBoundingClientRect();
-      tooltipStyle.value = {
-        position: 'fixed',
-        top: `${rect.top - 10}px`,
-        left: `${rect.left + rect.width / 2}px`,
-        transform: 'translateX(-50%) translateY(-100%)',
-        zIndex: 1000
-      };
-    };
-
-    const hideEventTooltip = () => {
-      tooltipEvent.value = null;
-    };
-
-    const loadTimetableData = async () => {
-      if (!selectedProject.value) return;
-      
-      loading.value = true;
-      error.value = null;
-      
-      try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // Filter events by selected project
-        const projectEvents = events.value.filter(event => 
-          event.project === selectedProject.value
-        );
-        
-        if (projectEvents.length === 0) {
-          error.value = 'No events found for the selected project.';
-        }
-        
-      } catch (err) {
-        error.value = 'Failed to load timetable data. Please try again.';
-      } finally {
-        loading.value = false;
-      }
-    };
-
-    // Time tracking
-    const updateCurrentTime = () => {
-      currentTime.value = new Date();
-    };
-
-    onMounted(() => {
-      const savedTheme = localStorage.getItem("zainpm-theme");
-      if (savedTheme === "light") {
-        isDark.value = false;
-      }
-      
-      // Auto-select first project
-      if (projects.value.length > 0) {
-        selectedProject.value = projects.value[0].name;
-        loadTimetableData();
-      }
-      
-      // Update time every minute
-      timeInterval = setInterval(updateCurrentTime, 60000);
-      updateCurrentTime();
-    });
-
-    onUnmounted(() => {
-      if (timeInterval) {
-        clearInterval(timeInterval);
-      }
-    });
-
+  data() {
     return {
-      isDark,
-      toggleTheme,
-      activeNav,
-      setActiveNav,
-      currentView,
-      viewTypes,
-      currentDate,
-      selectedDate,
-      selectedEvent,
-      selectedProject,
-      loading,
-      error,
-      projects,
-      events,
-      currentPeriodLabel,
-      periodSubtitle,
-      weekDays,
-      monthDates,
-      timeSlots,
-      dayNames,
-      showCurrentTimeIndicator,
-      tooltipEvent,
-      tooltipStyle,
-      isToday,
-      isWeekend,
-      isCurrentHour,
-      formatHour,
-      formatPeriod,
-      formatDateKey,
-      formatEventDate,
-      getEventsForSlot,
-      getEventsForDate,
-      getEventTypeClass,
-      getEventStyle,
-      getEventColor,
-      getCurrentTimeStyle,
-      previousPeriod,
-      nextPeriod,
-      goToToday,
-      selectDate,
-      selectEvent,
-      createEvent,
-      editEvent,
-      deleteEvent,
-      showMoreEvents,
-      showEventTooltip,
-      hideEventTooltip,
-      loadTimetableData
-    };
+      // theme / nav
+      isDark: true,
+      activeNav: 'timetable',
+
+      // view
+      currentView: 'Week', // 'Week' | 'Month'
+      currentDate: new Date(),
+
+      // ui
+      loading: false,
+      error: null,
+
+      // projects & filter
+      projects: [],
+      selectedProject: '',
+
+      // hour grid bounds (keeps original behaviour)
+      hourStart: 6,
+      hourEnd: 22,
+
+      // events loaded from API
+      events: [],
+
+      // tooltip & selection
+      selectedEvent: null,
+      tooltipEvent: null,
+      tooltipStyle: { top: '0px', left: '0px' },
+
+      // store + live time
+      userStore: null,
+      now: new Date()
+    }
+  },
+
+  computed: {
+    // expose period bounds depending on view
+    periodStart() {
+      return this.currentView === 'Month'
+        ? startOfMonth(this.currentDate)
+        : startOfWeek(this.currentDate, { weekStartsOn: 1 })
+    },
+    periodEnd() {
+      return this.currentView === 'Month'
+        ? endOfMonth(this.currentDate)
+        : endOfWeek(this.currentDate, { weekStartsOn: 1 })
+    },
+
+    periodLabel() {
+      if (this.currentView === 'Month') return format(this.currentDate, 'MMMM yyyy')
+      const s = startOfWeek(this.currentDate, { weekStartsOn: 1 })
+      const e = endOfWeek(this.currentDate, { weekStartsOn: 1 })
+      return `${format(s, 'MMM d')} — ${format(e, 'MMM d, yyyy')}`
+    },
+
+    visibleDays() {
+      const days = []
+      let cur = this.periodStart
+      while (cur <= this.periodEnd) {
+        days.push(new Date(cur))
+        cur = addDays(cur, 1)
+      }
+      return days
+    },
+
+    // used by template to decide whether to show current-time line
+    showCurrentTimeIndicator() {
+      return this.visibleDays.some(d => isSameDay(d, new Date()))
+    }
+  },
+
+  methods: {
+    // expose date-fns functions that the template calls directly (template can't access imports)
+    format,     // allows calling `format(...)` in template
+    isSameDay,  // allows calling `isSameDay(...)` in template
+
+    // theme
+    toggleTheme() {
+      this.isDark = !this.isDark
+      localStorage.setItem('zainpm-theme', this.isDark ? 'dark' : 'light')
+    },
+
+    // Projects
+    async loadProjects() {
+      this.loading = true
+      this.error = null
+      try {
+        const user = authService.getCurrentUser()
+        const companyName = (user && user.company_name) || (this.userStore && this.userStore.companyName)
+        if (!companyName) {
+          this.error = 'company name not found; cannot load projects'
+          return
+        }
+        const resp = await projectService.getProjects(companyName)
+        this.projects = (resp && resp.projects) ? resp.projects : []
+        if (!this.selectedProject && this.projects.length) this.selectedProject = this.projects[0].name
+      } catch (err) {
+        this.error = err?.message || String(err)
+      } finally {
+        this.loading = false
+      }
+    },
+
+    // Timetable loading (uses visualizationService, conservative parsing)
+    async loadTimetable() {
+      this.loading = true
+      this.error = null
+      try {
+        const user = authService.getCurrentUser()
+        const companyName = (user && user.company_name) || (this.userStore && this.userStore.companyName)
+        if (!companyName) {
+          this.error = 'company name not found; cannot load timetable'
+          return
+        }
+
+        const payload = await visualizationService.getTimetable(companyName, this.selectedProject || null)
+        const rawEvents = Array.isArray(payload) ? payload : (payload.events || [])
+
+        this.events = rawEvents.map(ev => {
+          const start = ev.start ? parseISO(ev.start)
+                        : ev.start_time ? parseISO(ev.start_time)
+                        : ev.start_time_iso ? parseISO(ev.start_time_iso)
+                        : new Date()
+
+          let end = null
+          if (ev.end) end = parseISO(ev.end)
+          else if (ev.end_time) end = parseISO(ev.end_time)
+          else if (ev.expected_duration != null) end = addMinutes(start, Number(ev.expected_duration) || 0)
+          else if (ev.duration_minutes != null) end = addMinutes(start, Number(ev.duration_minutes) || 0)
+          else end = addMinutes(start, 60)
+
+          const title = ev.title || ev.task_name || ev.name || ev.task || 'Untitled'
+          const proj = ev.project_name || ev.project || ev.proj_name || ''
+          const members = ev.members || ev.team || ev.assignees || []
+
+          const priority = (ev.priority || ev.priority_level || ev.task_priority || '').toString().toLowerCase() || null
+          const progress = ev.progress != null ? Number(ev.progress) : (ev.status_percentage ?? 0)
+          const state = ev.state || ev.status || ev.task_state || 'unknown'
+
+          return {
+            id: ev.id ?? `${proj}:${title}:${start.toISOString()}`,
+            title,
+            project: proj,
+            members,
+            start,
+            end,
+            duration: differenceInMinutes(end, start),
+            progress,
+            state,
+            priority,
+            raw: ev
+          }
+        })
+      } catch (err) {
+        this.error = err?.message || String(err)
+      } finally {
+        this.loading = false
+      }
+    },
+
+    // Interactive task updates (use taskService)
+    async markTaskAs(task, state) {
+      try {
+        const user = authService.getCurrentUser()
+        if (!user?.company_name) throw new Error('Not authenticated')
+        const taskName = task.raw?.task_name || task.title || task.raw?.name || task.raw?.task
+        await taskService.markTaskAs(user.company_name, task.project, taskName, state)
+        await this.loadTimetable()
+      } catch (e) {
+        alert(`Failed to update task: ${e?.message || e}`)
+      }
+    },
+
+    async postponeTask(task, newStartISO, newDurationMinutes) {
+      try {
+        const user = authService.getCurrentUser()
+        if (!user?.company_name) throw new Error('Not authenticated')
+        const taskName = task.raw?.task_name || task.title || task.raw?.name || task.raw?.task
+        await taskService.postponeTask(user.company_name, task.project, taskName, newStartISO, newDurationMinutes)
+        await this.loadTimetable()
+      } catch (e) {
+        alert(`Failed to postpone: ${e?.message || e}`)
+      }
+    },
+
+    // navigation
+    prevPeriod() {
+      if (this.currentView === 'Month') this.currentDate = addMonths(this.currentDate, -1)
+      else this.currentDate = addWeeks(this.currentDate, -1)
+    },
+    nextPeriod() {
+      if (this.currentView === 'Month') this.currentDate = addMonths(this.currentDate, 1)
+      else this.currentDate = addWeeks(this.currentDate, 1)
+    },
+    goToToday() {
+      this.currentDate = new Date()
+    },
+    setView(v) {
+      this.currentView = v
+    },
+
+    // helpers used by template
+    hours() {
+      const start = Number(this.hourStart) || 0
+      const end = Number(this.hourEnd) || 23
+      const arr = []
+      for (let h = start; h <= end; h++) arr.push(h)
+      return arr
+    },
+
+    eventsForDate(date) {
+      return this.events.filter(e =>
+        isSameDay(e.start, date) || isWithinInterval(date, { start: e.start, end: e.end })
+      )
+    },
+
+    formatTimeRange(ev) {
+      if (!ev || !ev.start) return ''
+      return `${format(ev.start, 'HH:mm')} — ${format(ev.end, 'HH:mm')}`
+    },
+
+    getEventsForSlot(date, hour) {
+      const slotStart = addHours(startOfDay(date), hour)
+      const slotEnd = addHours(slotStart, 1)
+      return this.events.filter(e =>
+        isWithinInterval(e.start, { start: slotStart, end: slotEnd }) ||
+        isWithinInterval(e.end, { start: slotStart, end: slotEnd }) ||
+        (e.start <= slotStart && e.end >= slotEnd)
+      )
+    },
+
+    // tooltip
+    showTooltip(ev, mouseEvent) {
+      this.tooltipEvent = ev
+      this.tooltipStyle = { top: `${mouseEvent.clientY + 8}px`, left: `${mouseEvent.clientX + 8}px` }
+    },
+    hideTooltip() {
+      this.tooltipEvent = null
+    },
+
+    // filters change
+    async onProjectChange() {
+      await this.loadTimetable()
+    }
+  },
+
+  async mounted() {
+    const saved = localStorage.getItem('zainpm-theme')
+    if (saved === 'light') this.isDark = false
+
+    this.userStore = useUserStore()
+    await this.loadProjects()
+    await this.loadTimetable()
+
+    this._nowTimer = setInterval(() => { this.now = new Date() }, 60 * 1000)
+  },
+
+  beforeUnmount() {
+    if (this._nowTimer) clearInterval(this._nowTimer)
   }
-};
+}
 </script>
+
 
 <style scoped>
 @import '@/assets/css/main.css';

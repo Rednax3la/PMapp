@@ -69,9 +69,9 @@
 </template>
 
 <script>
-import { format } from 'date-fns';
-import AppButton from '@/components/ui/AppButton.vue';
-import StateBadge from '@/components/ui/StateBadge.vue';
+import { format } from 'date-fns'
+import AppButton from '@/components/ui/AppButton.vue'
+import StateBadge from '@/components/ui/StateBadge.vue'
 
 export default {
   name: 'ProjectModal',
@@ -80,32 +80,29 @@ export default {
     project: { type: Object, required: true }
   },
   emits: ['close'],
-  setup() {
-    const formatDateRange = (startDate, endDate) => {
+  methods: {
+    formatDateRange(startDate, endDate) {
       try {
-      // Handle string dates that might be invalid
-      const start = startDate ? new Date(startDate) : null;
-      const end = endDate ? new Date(endDate) : null;
-    
-      // Check if dates are valid
-      if (!start || isNaN(start.getTime())) {
-        return 'Invalid start date';
+        const start = startDate ? new Date(startDate) : null
+        const end = endDate ? new Date(endDate) : null
+
+        if (!start || isNaN(start.getTime())) {
+          return 'Invalid start date'
+        }
+        if (!end || isNaN(end.getTime())) {
+          return 'Invalid end date'
+        }
+
+        return `${format(start, 'MMM dd, yyyy')} - ${format(end, 'MMM dd, yyyy')}`
+      } catch (error) {
+        console.error('Date formatting error:', error)
+        return 'Invalid date range'
       }
-      if (!end || isNaN(end.getTime())) {
-        return 'Invalid end date';
-      }
-    
-      return `${format(start, 'MMM dd, yyyy')} - ${format(end, 'MMM dd, yyyy')}`;
-    } catch (error) {
-      console.error('Date formatting error:', error);
-      return 'Invalid date range';
     }
   }
-
-    return { formatDateRange };
-  }
-};
+}
 </script>
+
 
 <style scoped>
 .modal-overlay {

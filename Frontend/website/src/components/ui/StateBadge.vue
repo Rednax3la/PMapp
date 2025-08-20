@@ -6,8 +6,6 @@
 </template>
 
 <script>
-import { computed } from 'vue'
-
 export default {
   name: 'StateBadge',
   props: {
@@ -16,12 +14,11 @@ export default {
       default: 'unknown'
     }
   },
-  setup(props) {
-    const badgeClass = computed(() => {
-      const status = (props.status || 'unknown').toLowerCase()
-      
+  computed: {
+    badgeClass() {
+      const status = (this.status || 'unknown').toLowerCase()
       const baseClass = 'state-badge'
-      
+
       switch (status) {
         case 'complete':
         case 'completed':
@@ -42,20 +39,15 @@ export default {
         default:
           return `${baseClass} state-unknown`
       }
-    })
-
-    const displayStatus = computed(() => {
-      const status = props.status || 'Unknown'
+    },
+    displayStatus() {
+      const status = this.status || 'Unknown'
       return status.charAt(0).toUpperCase() + status.slice(1)
-    })
-
-    return {
-      badgeClass,
-      displayStatus
     }
   }
 }
 </script>
+
 
 <style scoped>
 .state-badge {

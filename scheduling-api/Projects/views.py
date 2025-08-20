@@ -1,10 +1,12 @@
 # scheduling-api/Projects/views.py
 from flask import Blueprint, request, jsonify
 from datetime import datetime, timedelta
+import re
 import pytz
-from createandget import create_project, create_project_update, create_task, get_project_by_company_and_name, projects_db, tasks_db, updates_db, project_updates_db
+from createandget import create_project, create_project_update, create_task, get_project_by_company_and_name
 from createandget import get_project_tasks, get_task_state, get_task_by_name
 from helpers import format_duration
+from db import projects_col, tasks_col, updates_col, project_updates_col
 
 projects_bp = Blueprint('projects', __name__, url_prefix='/projects')
 
@@ -15,28 +17,34 @@ def view_projects():
     if not company:
         return jsonify({"error": "company_name is required"}), 400
 
+    company_filter = {"company_name": {"$regex": f"^{re.escape(company)}$", "$options": "i"}}
+
     results = []
-    for proj in projects_db.values():
-        if proj.get('company_name', '').lower() != company.lower():
-            continue
+    for proj in projects_col.find(company_filter):
+        # Prefer explicit 'id' if you set it; else fall back to Mongo _id
+        proj_id = proj.get('id') or (str(proj.get('_id')) if proj.get('_id') is not None else None)
 
-        # Ensure objectives list exists
-        objectives = proj.get('objectives', [])
+        # Fetch tasks via helper (Mongo-backed), then compute aggregates locally
+        tasks = get_project_tasks(proj_id) or []
 
-        # Calculate total estimated cost from tasks
-        total_cost = 0
-        for tid in proj.get('tasks', []):
-            t = tasks_db.get(tid)
-            if t:
-                total_cost += t.get('estimated_cost', 0)
-        proj['total_estimated_cost'] = total_cost
+        # Map task id -> name for dependency name resolution
+        id_to_name = {t.get('id'): t.get('name') for t in tasks if t}
+
+        total_cost = sum((t or {}).get('estimated_cost', 0) for t in tasks)
+
+        # Safe datetime -> ISO8601
+        start_date_val = proj.get('start_date')
+        if isinstance(start_date_val, datetime):
+            start_date_iso = start_date_val.isoformat()
+        else:
+            start_date_iso = start_date_val if start_date_val is None else str(start_date_val)
 
         proj_info = {
-            "id": proj['id'],
-            "name": proj['name'],
-            "start_date": proj['start_date'].isoformat(),
+            "id": proj_id,
+            "name": proj.get('name'),
+            "start_date": start_date_iso,
             "project_type": proj.get('project_type', 'scheduled'),
-            "objectives": objectives,
+            "objectives": proj.get('objectives', []),
             "expected_duration": proj.get('expected_duration'),
             **({"duration": format_duration(proj['duration'])} if proj.get('duration') else {}),
             "total_estimated_cost": total_cost,
@@ -45,23 +53,30 @@ def view_projects():
             "tasks": []
         }
 
-        for t in get_project_tasks(proj['id']):
-            # Each task must include its estimated cost if present
-            est_cost = t.get('estimated_cost', 0)
+        for t in tasks:
+            if not t:
+                continue
+            # Safe datetime -> ISO8601
+            st_val = t.get('start_time')
+            if isinstance(st_val, datetime):
+                st_iso = st_val.isoformat()
+            else:
+                st_iso = st_val if st_val is None else str(st_val)
+
+            # Convert dependency ids -> names when possible
+            dep_names = [id_to_name.get(dep, dep) for dep in (t.get('dependencies', []) or [])]
+
             task_entry = {
-                "id": t['id'],
-                "name": t['name'],
-                "start_time": t['start_time'].isoformat(),
-                "expected_duration": t.get('duration_str'),
-                **({"duration": format_duration(t['duration'])} if any(
-                    updates_db[uid]['status_percentage'] == 100
-                    for uid in t.get('updates', [])
-                ) else {}),
-                "estimated_cost": est_cost,
+                "id": t.get('id'),
+                "name": t.get('name'),
+                "start_time": st_iso,
+                # Keep previous key; tolerate either precomputed string or minutes value
+                "expected_duration": t.get('duration_str', t.get('expected_duration')),
+                # Previously duration was included only when a 100% update existed; here we include it if present
+                **({"duration": format_duration(t['duration'])} if t.get('duration') else {}),
+                "estimated_cost": t.get('estimated_cost', 0),
                 "members": t.get('members', []),
-                "dependencies": [
-                    tasks_db[dep]['name'] for dep in t.get('dependencies', [])
-                ],
+                "dependencies": dep_names,
                 "state": t.get('state')
             }
             proj_info['tasks'].append(task_entry)
@@ -80,7 +95,7 @@ def latest_updates():
     # Filter projects
     proj_name = data.get('project_name')
     matching = [
-        p for p in projects_db.values()
+        p for p in projects_col.find()
         if p.get('company_name', '').lower() == company.lower()
            and (not proj_name or p['name'].lower() == proj_name.lower())
     ]
@@ -91,7 +106,7 @@ def latest_updates():
 
     # Collect latest update *per task*
     latest_by_task = {}
-    for upd in updates_db.values():
+    for upd in updates_col.values():
         tid = upd['task_id']
         if tid in proj_ids:
             existing = latest_by_task.get(tid)
@@ -101,7 +116,7 @@ def latest_updates():
     # Build the response list
     entries = []
     for upd in latest_by_task.values():
-        task = tasks_db[upd['task_id']]
+        task = tasks_col[upd['task_id']]
         proj = next(p for p in matching if p['id'] == task['project_id'])
         entries.append({
             "type": "task_update",
@@ -113,7 +128,7 @@ def latest_updates():
         })
 
     # Include any project-level updates, too
-    for pud in project_updates_db.values():
+    for pud in project_updates_col.values():
         if pud['project_id'] in proj_ids:
             proj = next(p for p in matching if p['id'] == pud['project_id'])
             entries.append({
@@ -176,7 +191,7 @@ def merge_projects():
     merged=create_project(new_name, start, company, projs[0].get('timezone'), ptype)
     for p in projs:
         for tid in p['tasks']:
-            t=tasks_db[tid]
+            t=tasks_col[tid]
             t['project_id']=merged['id']
             merged['tasks'].append(tid)
     create_project_update(merged['id'], f"Merged {names}")
@@ -216,8 +231,8 @@ def clone_project():
         old_to_new[t['id']]=newt['id']
     # fix dependencies
     for old, new in old_to_new.items():
-        for dep in tasks_db[new]['dependencies']:
-            tasks_db[new]['dependencies']=[old_to_new.get(d) for d in dep]
+        for dep in tasks_col[new]['dependencies']:
+            tasks_col[new]['dependencies']=[old_to_new.get(d) for d in dep]
     create_project_update(cloned['id'], f"Cloned from {original}")
     return jsonify({'cloned_project':{'id':cloned['id'],'name':cloned['name']}}),200
 
@@ -239,7 +254,7 @@ def project_states():
             return jsonify({"error": "Invalid time format, use ISO8601"}), 400
 
     results = []
-    for proj in projects_db.values():
+    for proj in projects_col.values():
         if proj.get('company_name', '').lower() != company.lower():
             continue
 
@@ -247,7 +262,7 @@ def project_states():
         deps = proj.get('dependencies', [])  # list of project IDs
         if deps:
             for dep_id in deps:
-                dep_proj = projects_db.get(dep_id)
+                dep_proj = projects_col.get(dep_id)
                 if dep_proj:
                     # if dependent project not complete
                     if dep_proj.get('state') != 'complete':
@@ -264,7 +279,7 @@ def project_states():
 
         # Skip further checks if delayed
         if deps and any(
-            projects_db.get(d, {}).get('state') != 'complete'
+            projects_col.get(d, {}).get('state') != 'complete'
             for d in deps
         ): continue
 
@@ -313,7 +328,7 @@ def restore():
         proj['state'] = 'active'
         # restore all tasks to in progress if they were complete
         for tid in proj.get('tasks', []):
-            task = tasks_db.get(tid)
+            task = tasks_col.get(tid)
             if task and get_task_state(tid) == 'complete':
                 # create a zero-percent update to shift state
                 uid = create_project_update(proj['id'], f"Restore project, task {task['name']} to in progress")
@@ -343,7 +358,7 @@ def restore():
     create_project_update(proj['id'], f"Restore task '{task_name}' to in progress")
     # Remove final completion update so state reverts
     last_upd = task.get('updates', [])[-1]
-    if updates_db.get(last_upd, {}).get('status_percentage') == 100:
+    if updates_col.get(last_upd, {}).get('status_percentage') == 100:
         # mark it as in progress by adding a new update with same percent
         uid = create_project_update(proj['id'], f"Task '{task_name}' restored to in progress")
     task['postponed'] = False

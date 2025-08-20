@@ -217,448 +217,114 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, watch } from 'vue';
-import { format } from 'date-fns';
-import Chart from 'chart.js/auto';
-import Sidebar from '@/components/layout/Sidebar.vue';
-import AppHeader from '@/components/layout/AppHeader.vue';
-import ThemeToggle from '@/components/layout/ThemeToggle.vue';
-import StateBadge from '@/components/ui/StateBadge.vue';
-import AppButton from '@/components/ui/AppButton.vue';
+import Sidebar from '@/components/layout/Sidebar.vue'
+import AppHeader from '@/components/layout/AppHeader.vue'
+import ThemeToggle from '@/components/layout/ThemeToggle.vue'
+import { projectService } from '@/services/projects'
+import { authService } from '@/services/auth'
 
 export default {
   name: 'ReportsPage',
-  components: {
-    Sidebar,
-    AppHeader,
-    ThemeToggle,
-    StateBadge,
-    AppButton
-  },
-  setup() {
-    // Theme Management
-    const isDark = ref(true);
-    const toggleTheme = () => {
-      isDark.value = !isDark.value;
-      localStorage.setItem("zainpm-theme", isDark.value ? "dark" : "light");
-    };
+  components: { Sidebar, AppHeader, ThemeToggle },
 
-    // Navigation
-    const activeNav = ref('reports');
-    const setActiveNav = (target) => {
-      activeNav.value = target;
-    };
-
-    // Filter State
-    const startDate = ref(format(new Date(2023, 4, 1), 'yyyy-MM-dd'));
-    const endDate = ref(format(new Date(), 'yyyy-MM-dd'));
-    const selectedProject = ref('');
-    const selectedMember = ref('');
-    const searchQuery = ref('');
-    const activePeriod = ref('Month');
-
-    // Data
-    const projects = ref([
-      'Website Redesign', 'Mobile App', 'Marketing Campaign', 
-      'API Integration', 'Database Migration'
-    ]);
-
-    const teamMembers = ref([
-      'Sarah Johnson', 'Michael Chen', 'Emma Rodriguez', 
-      'David Kim', 'Priya Patel', 'James Wilson'
-    ]);
-
-    const chartPeriods = ref(['Week', 'Month', 'Quarter', 'Year']);
-
-    const keyMetrics = ref([
-      {
-        label: 'Active Projects',
-        value: '12',
-        change: '+2 from last month',
-        changeClass: 'positive',
-        changeIcon: 'fas fa-arrow-up',
-        icon: 'fas fa-project-diagram'
-      },
-      {
-        label: 'Completion Rate',
-        value: '68%',
-        change: '+5% from last month',
-        changeClass: 'positive',
-        changeIcon: 'fas fa-arrow-up',
-        icon: 'fas fa-chart-line'
-      },
-      {
-        label: 'Budget Utilization',
-        value: '72%',
-        change: '-3% from last month',
-        changeClass: 'negative',
-        changeIcon: 'fas fa-arrow-down',
-        icon: 'fas fa-dollar-sign'
-      },
-      {
-        label: 'Team Efficiency',
-        value: '89%',
-        change: '+7% from last month',
-        changeClass: 'positive',
-        changeIcon: 'fas fa-arrow-up',
-        icon: 'fas fa-users'
-      }
-    ]);
-
-    const reportData = ref([
-      {
-        id: 1,
-        project: 'Website Redesign',
-        lead: 'Sarah Johnson',
-        progress: 75,
-        completedTasks: 15,
-        totalTasks: 20,
-        budget: 25000,
-        spent: 18750,
-        efficiency: 92,
-        deadline: new Date(2023, 6, 15),
-        status: 'In Progress'
-      },
-      {
-        id: 2,
-        project: 'Mobile App',
-        lead: 'David Kim',
-        progress: 45,
-        completedTasks: 9,
-        totalTasks: 20,
-        budget: 40000,
-        spent: 22000,
-        efficiency: 78,
-        deadline: new Date(2023, 7, 30),
-        status: 'In Progress'
-      },
-      {
-        id: 3,
-        project: 'Marketing Campaign',
-        lead: 'Emma Rodriguez',
-        progress: 90,
-        completedTasks: 18,
-        totalTasks: 20,
-        budget: 15000,
-        spent: 14200,
-        efficiency: 95,
-        deadline: new Date(2023, 5, 30),
-        status: 'Nearly Complete'
-      },
-      {
-        id: 4,
-        project: 'API Integration',
-        lead: 'Michael Chen',
-        progress: 30,
-        completedTasks: 6,
-        totalTasks: 20,
-        budget: 20000,
-        spent: 8000,
-        efficiency: 85,
-        deadline: new Date(2023, 8, 15),
-        status: 'In Progress'
-      },
-      {
-        id: 5,
-        project: 'Database Migration',
-        lead: 'Priya Patel',
-        progress: 60,
-        completedTasks: 12,
-        totalTasks: 20,
-        budget: 30000,
-        spent: 19500,
-        efficiency: 88,
-        deadline: new Date(2023, 7, 10),
-        status: 'In Progress'
-      }
-    ]);
-
-    // Chart Refs
-    const progressChart = ref(null);
-    const distributionChart = ref(null);
-    const performanceChart = ref(null);
-    const timelineChart = ref(null);
-
-    let chartInstances = {};
-
-    // Computed Properties
-    const filteredReports = computed(() => {
-      let result = [...reportData.value];
-      
-      if (searchQuery.value) {
-        const query = searchQuery.value.toLowerCase();
-        result = result.filter(r => 
-          r.project.toLowerCase().includes(query) || 
-          r.lead.toLowerCase().includes(query)
-        );
-      }
-      
-      if (selectedProject.value) {
-        result = result.filter(r => r.project === selectedProject.value);
-      }
-      
-      if (selectedMember.value) {
-        result = result.filter(r => r.lead === selectedMember.value);
-      }
-      
-      return result;
-    });
-
-    // Helper Functions
-    const formatNumber = (num) => {
-      return new Intl.NumberFormat().format(num);
-    };
-
-    const formatDate = (date) => {
-      return format(date, 'MMM d, yyyy');
-    };
-
-    const getProgressColor = (progress) => {
-      if (isDark.value) {
-        // Original bright colors for dark mode
-        if (progress >= 80) return '#00ffb3';
-        if (progress >= 60) return '#00fff7';
-        if (progress >= 40) return '#ffb300';
-        return '#ff0066';
-      } else {
-        // Softer colors for light mode
-        if (progress >= 80) return '#059669';
-        if (progress >= 60) return '#0891b2';
-        if (progress >= 40) return '#d97706';
-        return '#dc2626';
-      }
-    };
-
-    const getEfficiencyClass = (efficiency) => {
-      if (efficiency >= 90) return 'excellent';
-      if (efficiency >= 80) return 'good';
-      if (efficiency >= 70) return 'average';
-      return 'poor';
-    };
-
-    const sortBy = (field) => {
-      console.log('Sorting by:', field);
-      // Implementation for table sorting
-    };
-
-    // Chart Initialization
-    const initCharts = () => {
-      // Destroy existing charts
-      Object.values(chartInstances).forEach(chart => {
-        if (chart) chart.destroy();
-      });
-
-      const textColor = isDark.value ? '#ffffff' : '#102530';
-      const gridColor = isDark.value ? '#1e2f3a' : '#c7e3ec';
-      
-      // Theme-aware color palette
-      const colors = {
-        primary: isDark.value ? '#00fff7' : '#0891b2',
-        success: isDark.value ? '#00ffb3' : '#059669',
-        warning: isDark.value ? '#ffb300' : '#d97706',
-        danger: isDark.value ? '#ff0066' : '#dc2626',
-        purple: isDark.value ? '#9c88ff' : '#7c3aed',
-        orange: isDark.value ? '#ff6b6b' : '#ea580c',
-        gray: isDark.value ? '#6c757d' : '#6b7280'
-      };
-
-      // Progress Chart
-      if (progressChart.value) {
-        chartInstances.progress = new Chart(progressChart.value, {
-          type: 'line',
-          data: {
-            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-            datasets: [{
-              label: 'Project Progress',
-              data: [20, 35, 45, 60, 70, 75],
-              borderColor: colors.primary,
-              backgroundColor: isDark.value ? 'rgba(0, 255, 247, 0.1)' : 'rgba(8, 145, 178, 0.1)',
-              pointBackgroundColor: colors.primary,
-              pointBorderColor: isDark.value ? '#ffffff' : '#ffffff',
-              pointBorderWidth: 2,
-              tension: 0.4,
-              fill: true
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { labels: { color: textColor } }
-            },
-            scales: {
-              x: { 
-                ticks: { color: textColor },
-                grid: { color: gridColor }
-              },
-              y: { 
-                ticks: { color: textColor },
-                grid: { color: gridColor }
-              }
-            }
-          }
-        });
-      }
-
-      // Distribution Chart
-      if (distributionChart.value) {
-        chartInstances.distribution = new Chart(distributionChart.value, {
-          type: 'doughnut',
-          data: {
-            labels: ['Complete', 'In Progress', 'Delayed', 'Not Started'],
-            datasets: [{
-              data: [45, 30, 15, 10],
-              backgroundColor: [
-                colors.success,
-                colors.primary,
-                colors.warning,
-                colors.danger
-              ],
-              borderColor: isDark.value ? '#1a2332' : '#ffffff',
-              borderWidth: 2
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { 
-                position: 'right',
-                labels: { 
-                  color: textColor,
-                  usePointStyle: true,
-                  padding: 15
-                }
-              }
-            }
-          }
-        });
-      }
-
-      // Performance Chart
-      if (performanceChart.value) {
-        chartInstances.performance = new Chart(performanceChart.value, {
-          type: 'bar',
-          data: {
-            labels: teamMembers.value.slice(0, 5),
-            datasets: [{
-              label: 'Tasks Completed',
-              data: [12, 19, 8, 15, 10],
-              backgroundColor: [
-                colors.primary,
-                colors.success, 
-                colors.warning,
-                colors.orange,
-                colors.purple
-              ],
-              borderColor: colors.primary,
-              borderWidth: 1
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-              legend: { labels: { color: textColor } }
-            },
-            scales: {
-              x: { 
-                ticks: { color: textColor },
-                grid: { color: gridColor }
-              },
-              y: { 
-                ticks: { color: textColor },
-                grid: { color: gridColor }
-              }
-            }
-          }
-        });
-      }
-
-      // Timeline Chart
-      if (timelineChart.value) {
-        chartInstances.timeline = new Chart(timelineChart.value, {
-          type: 'bar',
-          data: {
-            labels: projects.value,
-            datasets: [{
-              label: 'Planned',
-              data: [100, 100, 100, 100, 100],
-              backgroundColor: isDark.value ? 'rgba(108, 117, 125, 0.4)' : 'rgba(107, 114, 128, 0.3)',
-              borderColor: colors.gray,
-              borderWidth: 1
-            }, {
-              label: 'Actual',
-              data: [75, 45, 90, 30, 60],
-              backgroundColor: colors.primary,
-              borderColor: colors.success,
-              borderWidth: 1
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            indexAxis: 'y',
-            plugins: {
-              legend: { labels: { color: textColor } }
-            },
-            scales: {
-              x: { 
-                ticks: { color: textColor },
-                grid: { color: gridColor }
-              },
-              y: { 
-                ticks: { color: textColor },
-                grid: { color: gridColor }
-              }
-            }
-          }
-        });
-      }
-    };  
-
-    onMounted(() => {
-      const savedTheme = localStorage.getItem("zainpm-theme");
-      if (savedTheme === "light") {
-        isDark.value = false;
-      }
-      
-      setTimeout(initCharts, 100);
-    });
-
-    watch(isDark, () => {
-      setTimeout(initCharts, 100);
-    });
-
+  data() {
     return {
-      isDark,
-      toggleTheme,
-      activeNav,
-      setActiveNav,
-      startDate,
-      endDate,
-      selectedProject,
-      selectedMember,
-      searchQuery,
-      activePeriod,
-      projects,
-      teamMembers,
-      chartPeriods,
-      keyMetrics,
-      reportData,
-      filteredReports,
-      progressChart,
-      distributionChart,
-      performanceChart,
-      timelineChart,
-      formatNumber,
-      formatDate,
-      getProgressColor,
-      getEfficiencyClass,
-      sortBy
-    };
-  } 
-};  
+      // Theme
+      isDark: true,
+
+      // Data
+      reports: [],
+      projects: [],
+
+      // State
+      loading: false,
+      error: null,
+
+      // Filters
+      selectedProject: '',
+      filters: {
+        dateRange: null,
+        status: 'all'
+      }
+    }
+  },
+
+  computed: {
+    filteredReports() {
+      let results = this.reports.slice()
+
+      // filter by project
+      if (this.selectedProject) {
+        results = results.filter(r => r.project === this.selectedProject)
+      }
+
+      // filter by status
+      if (this.filters.status !== 'all') {
+        results = results.filter(r => r.status === this.filters.status)
+      }
+
+      // filter by date range
+      if (this.filters.dateRange && this.filters.dateRange.length === 2) {
+        const [start, end] = this.filters.dateRange
+        const startDate = new Date(start)
+        const endDate = new Date(end)
+        results = results.filter(r => {
+          const d = new Date(r.date)
+          return d >= startDate && d <= endDate
+        })
+      }
+
+      return results
+    }
+  },
+
+  methods: {
+    toggleTheme() {
+      this.isDark = !this.isDark
+      localStorage.setItem('zainpm-theme', this.isDark ? 'dark' : 'light')
+    },
+
+    async fetchProjects() {
+      try {
+        const user = authService.getCurrentUser()
+        if (!user?.company_name) throw new Error('Missing company information')
+        this.projects = await projectService.getProjects(user.company_name)
+      } catch (err) {
+        this.error = err.message || 'Failed to fetch projects'
+      }
+    },
+
+    async fetchReports() {
+      this.loading = true
+      this.error = null
+      try {
+        const user = authService.getCurrentUser()
+        if (!user?.company_name) throw new Error('Missing company information')
+        // latest updates serve as reports
+        this.reports = await projectService.getLatestUpdates(user.company_name)
+      } catch (err) {
+        this.error = err.message || 'Failed to fetch reports'
+      } finally {
+        this.loading = false
+      }
+    },
+
+    applyFilters() {
+      // no-op: computed handles it
+    },
+
+    formatDate(d) {
+      return d ? new Date(d).toLocaleDateString() : 'N/A'
+    }
+  },
+
+  mounted() {
+    const saved = localStorage.getItem('zainpm-theme')
+    this.isDark = saved ? saved === 'dark' : this.isDark
+    this.fetchProjects()
+    this.fetchReports()
+  }
+}
 </script>
 
 <style scoped>

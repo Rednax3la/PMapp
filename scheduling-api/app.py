@@ -1,19 +1,21 @@
 # scheduling-api/app.py
 from datetime import datetime, timedelta
+from bson import ObjectId
 import pytz
 import os
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from db import users_col, projects_col, tasks_col, ping as mongo_ping
+from db import users_col, projects_col, tasks_col, updates_col, ping as mongo_ping
 from auth_helpers import is_valid_email, normalize_email, create_user, check_password
 from validators import ProjectCreate, TaskCreate, BatchTaskCreate
-from createandget import create_project, create_project_update, create_task, create_task_update, fetch_priority, get_latest_progress, get_member_tasks, get_project_by_company_and_name, get_project_tasks, create_tasks_batch, get_task_by_name, get_project_by_name, get_task_state, projects_db, tasks_db, updates_db
+from createandget import create_project, create_project_update, create_task, create_task_update, fetch_priority, get_latest_progress, get_member_tasks, get_project_by_company_and_name, get_project_tasks, create_tasks_batch, get_task_by_name, get_project_by_name, get_task_state
 from helpers import format_duration, parse_duration, save_uploaded_file
 from views import generate_timetable, generate_gantt_chart
 from Projects.views import projects_bp
 from flask_jwt_extended import (
-    JWTManager, create_access_token, get_jwt, jwt_required
+    JWTManager, create_access_token, get_jwt, jwt_required, get_jwt_identity, set_access_cookies, unset_jwt_cookies, verify_jwt_in_request
 )
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 CORS(app, origins=['http://localhost:8080'], supports_credentials=True)
@@ -168,7 +170,7 @@ def tasks_endpoint():
             
             tasks = create_tasks_batch(task_dicts)
             # Auto-add all members from batch tasks to project team
-            proj_record = projects_db.get(project['id'])
+            proj_record = projects_col.get(project['id'])
             if proj_record:
                 team = set(proj_record.get('team', []))
                 for t in batch_data.tasks:
@@ -256,7 +258,7 @@ def tasks_endpoint():
             return jsonify({"error":"Task name already exists in this project"}), 400
 
         # 7) Auto‑add members to the project’s team
-        proj_rec = projects_db[project['id']]
+        proj_rec = projects_col[project['id']]
         team = set(proj_rec.get('team', []))
         team.update(members_clean or [])
         proj_rec['team'] = list(team)
@@ -330,7 +332,7 @@ def create_task_update_endpoint():
         )
         # Persist expenditure in updates_db
         if expenditure is not None:
-            updates_db[update_id]['expenditure'] = expenditure
+            updates_col[update_id]['expenditure'] = expenditure
 
         return jsonify ({
             "update_id": update_id,
@@ -438,7 +440,7 @@ def states_endpoint():
         proj = get_project_by_name(data.get('project_name'))
         # Evaluate dependencies first
         for dep in proj.get('dependencies', []):
-            if projects_db[dep]['state'] != 'complete':
+            if projects_col[dep]['state'] != 'complete':
                 return jsonify({"project": proj['name'], "state": "delayed"}), 200
         # Evaluate task states
         states = [get_task_state(t['id'], now) for t in get_project_tasks(proj['id'])]
@@ -495,7 +497,7 @@ def mark_as_endpoint():
                 status_percentage=get_latest_progress(task['id']),
                 description="Task re‑marked as started"
             )
-        ts = updates_db[update_id]['timestamp'].isoformat()
+        ts = updates_col[update_id]['timestamp'].isoformat()
         return jsonify({
             "message": f"Task marked as {state}",
             "task": task,
@@ -509,7 +511,7 @@ def mark_as_endpoint():
             status_percentage=100,
             description="Task marked as complete"
         )
-        ts = updates_db[update_id]['timestamp'].isoformat()
+        ts = updates_col[update_id]['timestamp'].isoformat()
         return jsonify({
             "message": f"Task marked as {state}",
             "task": task,
@@ -522,7 +524,7 @@ def mark_as_endpoint():
             status_percentage=get_latest_progress(task['id']),
             description="Task marked as postponed"
         )
-        ts = updates_db[update_id]['timestamp'].isoformat()
+        ts = updates_col[update_id]['timestamp'].isoformat()
         return jsonify({
             "message": f"Task marked as {state}. Call /tasks/postpone-to to set new schedule",
             "task": task,
@@ -547,7 +549,7 @@ def postpone_to_endpoint():
         
         # Postpone entire project
         if not project_name:
-            projects = [p for p in projects_db.values() 
+            projects = [p for p in projects_col.values() 
                        if p['company_name'].lower() == company_name.lower()]
             
             if not projects:
@@ -560,7 +562,7 @@ def postpone_to_endpoint():
                 
                 # Update all tasks in project
                 for task_id in project['tasks']:
-                    task = tasks_db.get(task_id)
+                    task = tasks_col.get(task_id)
                     if task:
                         task['start_time'] += delta
             
@@ -587,7 +589,7 @@ def postpone_to_endpoint():
             project['start_date'] = new_start
             
             for task_id in project['tasks']:
-                task = tasks_db.get(task_id)
+                task = tasks_col.get(task_id)
                 if task:
                     task['start_time'] += delta
             
@@ -626,7 +628,7 @@ def postpone_to_endpoint():
             status_percentage=get_latest_progress(task['id']),
             description=f"Task postponed to {new_start.isoformat()}"
         )
-        ts = updates_db[update_id]['timestamp'].isoformat()
+        ts = updates_col[update_id]['timestamp'].isoformat()
         return jsonify({
             "message": "Task postponed",
             "task": task,
@@ -698,19 +700,47 @@ def get_task_members_endpoint():
         "members": task['members']
     })
 
-# Add this after app creation
-app.config["JWT_SECRET_KEY"] = "your-secret-key"  # Change in production!
+load_dotenv()
+jwt_secret = os.getenv("JWT_SECRET_KEY")
+if not jwt_secret:
+    raise RuntimeError("JWT_SECRET_KEY environment variable is required. Set a strong secret in your environment.")
+app.config["JWT_SECRET_KEY"] = jwt_secret
+
+# Configure JWT to use cookies for token storage
+app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
+
+# Cookie security flags - in production ensure SECURE=True and your site uses HTTPS.
+app.config["JWT_COOKIE_SECURE"] = os.getenv("JWT_COOKIE_SECURE", "False").lower() in ("1", "true", "yes")
+app.config["JWT_COOKIE_SAMESITE"] = os.getenv("JWT_COOKIE_SAMESITE", "Lax")  # Lax is a good default
+app.config["JWT_COOKIE_CSRF_PROTECT"] = os.getenv("JWT_COOKIE_CSRF_PROTECT", "True").lower() in ("1", "true", "yes")
+
+# How long access tokens live. Adjust via env var (minutes)
+access_expires_min = int(os.getenv("JWT_ACCESS_EXPIRES_MIN", "60"))
+app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=access_expires_min)
+
+# Paths (optional) for cookies
+app.config["JWT_ACCESS_COOKIE_PATH"] = os.getenv("JWT_ACCESS_COOKIE_PATH", "/")
+app.config["JWT_REFRESH_COOKIE_PATH"] = os.getenv("JWT_REFRESH_COOKIE_PATH", "/token/refresh")
+
+# Other useful config
+app.config["PROPAGATE_EXCEPTIONS"] = True
+
+# Initialize JWT extension
 jwt = JWTManager(app)
 
-
-users_db = {}
+@app.route("/logout", methods=["POST"])
+def logout():
+    """Clear the JWT cookies on logout."""
+    resp = jsonify({"logout": True})
+    unset_jwt_cookies(resp)
+    return resp, 200
 
 @app.route('/register', methods=['POST'])
 def register():
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     required = ['company_name', 'username', 'password', 'role']
-    if any(field not in data for field in required):
-        return jsonify({"error": "All fields are required"}), 400
+    if any(field not in data or not data.get(field) for field in required):
+        return jsonify({"error": "company_name, username, password and role are required"}), 400
 
     username = normalize_email(data['username'])
     if not is_valid_email(username):
@@ -718,13 +748,18 @@ def register():
 
     try:
         user = create_user(username, data['password'], data['company_name'], data['role'])
+        serialized = {
+            "id": str(user.get("id") or user.get("_id") or user.get("username")),
+            "username": user.get("username"),
+            "company_name": user.get("company_name"),
+            "role": user.get("role")
+        }
         return jsonify({
             "message": "User registered successfully",
-            "username": user['username'],
-            "company_name": user['company_name'],
-            "role": user['role']
+            "user": serialized
         }), 201
     except ValueError as e:
+        # Expected validation errors from create_user (e.g. duplicate email)
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": "Server error: " + str(e)}), 500
@@ -732,28 +767,34 @@ def register():
 
 @app.route('/login', methods=['POST'])
 def login():
-    data = request.json or {}
+    data = request.get_json(silent=True) or {}
     if 'username' not in data or 'password' not in data:
         return jsonify({"error": "Username and password required"}), 400
 
     username = normalize_email(data['username'])
     user_doc = users_col.find_one({"username": username})
-    if not user_doc or not check_password(data['password'], user_doc['password']):
+    if not user_doc or not check_password(data['password'], user_doc.get('password', '')):
         return jsonify({"error": "Invalid credentials"}), 401
 
+    # Create access token and set it as an HttpOnly cookie
     access_token = create_access_token(
-        identity=user_doc['username'],
+        identity=str(user_doc.get("id") or user_doc.get("_id") or user_doc.get("username")),
         additional_claims={
-            'company_name': user_doc.get('company_name'),
-            'role': user_doc.get('role')
+            "company_name": user_doc.get("company_name"),
+            "role": user_doc.get("role")
         }
     )
-    return jsonify({
-        "access_token": access_token,
-        "username": user_doc['username'],
-        "company_name": user_doc.get('company_name'),
-        "role": user_doc.get('role')
-    }), 200
+
+
+    resp = jsonify({
+        "message": "Login successful",
+        "username": user_doc.get("username"),
+        "company_name": user_doc.get("company_name"),
+        "role": user_doc.get("role")
+    })
+    # This sets the HttpOnly cookie (and also sets the csrf_access_token cookie if CSRF protect is enabled)
+    set_access_cookies(resp, access_token)
+    return resp, 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)

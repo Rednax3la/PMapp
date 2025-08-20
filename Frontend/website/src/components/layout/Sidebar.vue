@@ -21,28 +21,27 @@
 </template>
 
 <script>
-import { ref } from 'vue';
-
 export default {
   name: 'AppSidebar',
-  setup() {
-    const items = ref([
-      { target: 'dashboard', path: '/', icon: 'fas fa-home', label: 'Dashboard' },
-      { target: 'projects', path: '/projects', icon: 'fas fa-project-diagram', label: 'Projects' },
-      { target: 'tasks', path: '/tasks', icon: 'fas fa-tasks', label: 'Tasks' },
-      { target: 'gantt', path: '/gantt', icon: 'fas fa-chart-bar', label: 'Gantt Chart' },
-      { target: 'timetable', path: '/timetable', icon: 'fas fa-calendar-day', label: 'Timetable' },
-      { target: 'reports', path: '/reports', icon: 'fas fa-chart-pie', label: 'Reports' },
-      { target: 'members', path: '/members', icon: 'fas fa-users', label: 'Team Members' },
-      { target: 'settings', path: '/settings', icon: 'fas fa-cog', label: 'Settings' },
-      { target: 'help', path: '/help', icon: 'fas fa-question-circle', label: 'Help' },
-      { target: 'logout', path: '/logout', icon: 'fas fa-sign-out-alt', label: 'Logout' }
-    ]);
-
-    return { items };
+  data() {
+    return {
+      items: [
+        { target: 'dashboard', path: '/', icon: 'fas fa-home', label: 'Dashboard' },
+        { target: 'projects', path: '/projects', icon: 'fas fa-project-diagram', label: 'Projects' },
+        { target: 'tasks', path: '/tasks', icon: 'fas fa-tasks', label: 'Tasks' },
+        { target: 'gantt', path: '/gantt', icon: 'fas fa-chart-bar', label: 'Gantt Chart' },
+        { target: 'timetable', path: '/timetable', icon: 'fas fa-calendar-day', label: 'Timetable' },
+        { target: 'reports', path: '/reports', icon: 'fas fa-chart-pie', label: 'Reports' },
+        { target: 'members', path: '/members', icon: 'fas fa-users', label: 'Team Members' },
+        { target: 'settings', path: '/settings', icon: 'fas fa-cog', label: 'Settings' },
+        { target: 'help', path: '/help', icon: 'fas fa-question-circle', label: 'Help' },
+        { target: 'logout', path: '/logout', icon: 'fas fa-sign-out-alt', label: 'Logout' }
+      ]
+    }
   }
-};
+}
 </script>
+
 
 <style scoped>
 .sidebar {

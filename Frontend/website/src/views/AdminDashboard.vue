@@ -1,9 +1,9 @@
 //Frontend/website/src/views/AdminDashboard.vue
 <template>
-  <div class="admin-dashboard" :class="{ dark: isDark, light: !isDark }">  
+  <div class="admin-dashboard" :class="{ dark: isDark, light: !isDark }">
     <!-- Sidebar -->
     <Sidebar />
-    
+
     <!-- Main Content -->
     <div class="main-content">
       <AppHeader title="Dashboard">
@@ -11,15 +11,22 @@
           <ThemeToggle :is-dark="isDark" @toggle="toggleTheme" />
         </template>
       </AppHeader>
-      
+
       <!-- Stats Overview -->
       <div class="stats-grid">
-        <div class="stat-card" v-for="stat in stats" :key="stat.label">
+        <div
+          class="stat-card"
+          v-for="stat in displayStats"
+          :key="stat.label"
+          :class="{ 'stat-placeholder': stat.isPlaceholder }"
+        >
           <div class="stat-label">{{ stat.label }}</div>
-          <div class="stat-value">{{ stat.value }}</div>
+          <div class="stat-value" :style="{ color: stat.color }">
+            {{ stat.value ?? '0' }}
+          </div>
         </div>
       </div>
-      
+
       <!-- State Legend -->
       <div class="state-legend">
         <div class="legend-item" v-for="item in legendItems" :key="item.label">
@@ -27,7 +34,7 @@
           <span>{{ item.label }}</span>
         </div>
       </div>
-      
+
       <!-- Dashboard Content -->
       <div class="grid">
         <!-- Active Projects -->
@@ -37,23 +44,26 @@
             <router-link to="/projects" class="btn btn-primary btn-sm">View All</router-link>
           </div>
           <div class="card-body">
-            <div 
-              class="task-item" 
-              v-for="project in projects" 
-              :key="project.title"
+            <div
+              class="task-item"
+              v-for="project in projects"
+              :key="project.id || project.project_name"
             >
               <div class="task-info">
-                <div class="task-title">{{ project.title }}</div>
+                <div class="task-title">{{ project.project_name || project.name }}</div>
                 <div class="task-meta">
-                  <span><i class="far fa-calendar"></i> {{ project.dates }}</span>
-                  <span><i class="fas fa-tasks"></i> {{ project.tasks }}</span>
+                  <span><i class="far fa-calendar"></i>
+                    {{ formatDate(project.start_date || project.startDate) }}
+                    <span v-if="project.end_date || project.endDate"> - {{ formatDate(project.end_date || project.endDate) }}</span>
+                  </span>
+                  <span><i class="fas fa-tasks"></i> {{ (project.tasks && project.tasks.length) || project.tasks || '—' }}</span>
                 </div>
               </div>
-              <StateBadge :status="project.status" />
+              <StateBadge :state="project.state || project.status" />
             </div>
           </div>
         </div>
-        
+
         <!-- Recent Tasks -->
         <div class="card">
           <div class="card-header">
@@ -61,24 +71,27 @@
             <router-link to="/tasks" class="btn btn-primary btn-sm">View All</router-link>
           </div>
           <div class="card-body">
-            <div 
-              class="task-item" 
-              v-for="task in tasks" 
-              :key="task.title"
+            <div
+              class="task-item"
+              v-for="task in tasks"
+              :key="task.id || task.task_name"
             >
               <div class="task-info">
-                <div class="task-title">{{ task.title }}</div>
+                <div class="task-title">{{ task.title || task.task_name }}</div>
                 <div class="task-meta">
-                  <span><i class="far fa-calendar"></i> {{ task.dates }}</span>
-                  <span :class="task.priorityClass">{{ task.priority }}</span>
+                  <span><i class="far fa-calendar"></i>
+                    <span v-if="task.start_time">{{ formatDate(task.start_time) }}</span>
+                    <span v-else>—</span>
+                  </span>
+                  <span :class="priorityClass(task.priority)">{{ task.priority || '—' }}</span>
                 </div>
               </div>
-              <StateBadge :status="task.status" />
+              <StateBadge :state="task.state" />
             </div>
           </div>
         </div>
-        
-        <!-- Task Status Distribution -->
+
+        <!-- Task Status Distribution (chart) -->
         <div class="card">
           <div class="card-header">
             <span>Task Status Distribution</span>
@@ -89,7 +102,7 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Team Members -->
         <div class="card">
           <div class="card-header">
@@ -97,29 +110,25 @@
           </div>
           <div class="card-body">
             <div class="member-list">
-              <div 
-                class="member-tag" 
-                v-for="member in teamMembers" 
-                :key="member"
-              >
+              <div class="member-tag" v-for="member in uniqueTeamMembers" :key="member">
                 <i class="fas fa-user"></i> {{ member }}
               </div>
             </div>
           </div>
         </div>
       </div>
-      
+
       <!-- Upcoming Deadlines -->
-      <div class="card">
+      <div class="card" style="margin-top: 16px;">
         <div class="card-header">
           <span>Upcoming Deadlines</span>
         </div>
         <div class="card-body">
           <div class="grid">
-            <div 
-              class="task-item" 
-              v-for="deadline in deadlines" 
-              :key="deadline.title"
+            <div
+              class="task-item"
+              v-for="deadline in deadlines"
+              :key="deadline.title + (deadline.dueDate || '')"
             >
               <div class="task-info">
                 <div class="task-title">{{ deadline.title }}</div>
@@ -128,168 +137,249 @@
                   <span>Project: {{ deadline.project }}</span>
                 </div>
               </div>
-              <StateBadge :status="deadline.status" />
+              <StateBadge :state="deadline.status" />
             </div>
           </div>
         </div>
       </div>
+
     </div>
   </div>
 </template>
 
 <script>
-import { ref, reactive, onMounted, watch, computed } from 'vue';
-import Chart from 'chart.js/auto';
-import Sidebar from '@/components/layout/Sidebar.vue';
-import AppHeader from '@/components/layout/AppHeader.vue';
-import ThemeToggle from '@/components/layout/ThemeToggle.vue';
-import StateBadge from '@/components/ui/StateBadge.vue';
+import Chart from 'chart.js/auto'
+import Sidebar from '@/components/layout/Sidebar.vue'
+import AppHeader from '@/components/layout/AppHeader.vue'
+import ThemeToggle from '@/components/layout/ThemeToggle.vue'
+import StateBadge from '@/components/ui/StateBadge.vue'
+import { projectService } from '@/services/projects'
+import { authService } from '@/services/auth'
 
 export default {
   name: 'AdminDashboard',
-  components: {
-    Sidebar,
-    AppHeader, 
-    ThemeToggle,
-    StateBadge
+  components: { Sidebar, AppHeader, ThemeToggle, StateBadge },
+
+  data() {
+    return {
+      isDark: true,
+      stats: [],
+      projects: [],
+      tasks: [],
+      teamMembers: [],
+      deadlines: [],
+      loading: false,
+      error: null,
+      chartInstance: null
+    }
   },
-  setup() {
-    // Theme Management
-    const isDark = ref(true);
-    const toggleTheme = () => {
-      isDark.value = !isDark.value;
-      localStorage.setItem("zainpm-theme", isDark.value ? "dark" : "light");
-    };
 
-    // Stats Data
-    const stats = reactive([
-      { label: 'Active Projects', value: '12', color: 'var(--primary)' },
-      { label: 'Total Tasks', value: '84', color: 'var(--primary)' },
-      { label: 'Team Members', value: '23', color: 'var(--success)' },
-      { label: 'Completion Rate', value: '42%', color: 'var(--warning)' }
-    ]);
-
-    // Legend Items
-    const legendItems = computed(() => {
-      const a = isDark.value ? 0.2 : 0.5;
+  computed: {
+    legendItems() {
+      const a = this.isDark ? 0.2 : 0.5
       return [
-        { label: 'Tentative',    color: `rgba(108, 117, 125, ${a})` },
-        { label: 'Delayed',      color: `rgba(230, 57,   70,  ${a})` },
-        { label: 'In Progress',  color: `rgba(73,  80,  246, ${a})` },
-        { label: 'Overdue',      color: `rgba(247, 37,  133, ${a})` },
-        { label: 'Complete',     color: `rgba(76,  201, 240, ${a})` }
-      ];
-    });
+        { label: 'Tentative',   color: `rgba(108,117,125,${a})` },
+        { label: 'Delayed',     color: `rgba(230,57,70,${a})` },
+        { label: 'In Progress', color: `rgba(73,80,246,${a})` },
+        { label: 'Overdue',     color: `rgba(247,37,133,${a})` },
+        { label: 'Complete',    color: `rgba(76,201,240,${a})` }
+      ]
+    },
 
-    // Sample Data
-    const projects = reactive([
-      { title: 'Website Redesign', dates: 'Jun 1 - Jul 15', tasks: '18 tasks', status: 'In Progress' },
-      { title: 'Mobile App Development', dates: 'Jun 10 - Aug 5', tasks: '24 tasks', status: 'Tentative' },
-      { title: 'Marketing Campaign', dates: 'May 15 - Jun 30', tasks: '12 tasks', status: 'Overdue' }
-    ]);
-
-    const tasks = reactive([
-      { title: 'Design Homepage', dates: 'Jun 1 - Jun 5', priority: 'High Priority', priorityClass: 'priority-high', status: 'Complete' },
-      { title: 'API Integration', dates: 'Jun 10 - Jun 15', priority: 'Medium Priority', priorityClass: 'priority-medium', status: 'Delayed' },
-      { title: 'User Testing', dates: 'Jun 5 - Jun 8', priority: 'Low Priority', priorityClass: 'priority-low', status: 'In Progress' },
-      { title: 'Content Creation', dates: 'Jun 3 - Jun 7', priority: 'Medium Priority', priorityClass: 'priority-medium', status: 'Overdue' }
-    ]);
-
-    const teamMembers = reactive([
-      'Sarah Johnson', 'Michael Chen', 'Emma Rodriguez', 
-      'David Kim', 'Priya Patel', 'James Wilson'
-    ]);
-
-    const deadlines = reactive([
-      { title: 'Finalize Design Mockups', dueDate: 'Jun 12, 2023', project: 'Website Redesign', status: '2 days left' },
-      { title: 'Backend API Completion', dueDate: 'Jun 15, 2023', project: 'Mobile App', status: '5 days left' },
-      { title: 'Marketing Plan Presentation', dueDate: 'Jun 8, 2023', project: 'Marketing Campaign', status: 'Overdue' }
-    ]);
-
-    // Chart Logic
-    const chartCanvas = ref(null);
-    let chartInstance = null;
-
-    const initChart = () => {
-      if (chartInstance) {
-        chartInstance.destroy();
+    uniqueTeamMembers() {
+      return [...new Set(this.teamMembers || [])]
+    },
+    displayStats() {
+      if (Array.isArray(this.stats) && this.stats.length >= 4) {
+        // normal path: if API supplied at least four cards, use them
+        return this.stats
       }
-      
-      const ctx = chartCanvas.value.getContext('2d');
-      chartInstance = new Chart(ctx, {
+
+      // default placeholder skeleton — keeps labels and colors consistent with your UI
+      const defaults = [
+        { label: 'Active Projects', value: 0, color: 'var(--primary)' },
+        { label: 'Total Tasks', value: 0, color: 'var(--primary)' },
+        { label: 'Team Members', value: 0, color: 'var(--success)' },
+        { label: 'Completion Rate', value: '0%', color: 'var(--warning)' }
+      ]
+
+      // if you have some stat values but <4, merge them into defaults
+      if (Array.isArray(this.stats) && this.stats.length > 0) {
+        return defaults.map((d, i) => {
+          const s = this.stats[i]
+          return s ? { ...d, ...s, isPlaceholder: false } : { ...d, isPlaceholder: true }
+        })
+      }
+
+      // no stats at all -> placeholders
+      return defaults.map(d => ({ ...d, isPlaceholder: true }))
+    }
+  },
+
+  methods: {
+    toggleTheme() {
+      this.isDark = !this.isDark
+      localStorage.setItem('zainpm-theme', this.isDark ? 'dark' : 'light')
+      // Recreate chart to respect color alpha / theme differences
+      this.$nextTick(() => this.initChart())
+    },
+
+    async fetchDashboardData() {
+      this.loading = true
+      this.error = null
+      try {
+        const user = authService.getCurrentUser()
+        if (!user?.company_name) throw new Error('Missing company info')
+
+        // Fetch projects
+        const projectsResp = await projectService.getProjects(user.company_name)
+        this.projects = projectsResp.projects || []
+
+        // Fetch latest updates / tasks (backend endpoint returns updates/tasks)
+        const updatesResp = await projectService.getLatestUpdates(user.company_name)
+        // projectService.getLatestUpdates returns either { updates: [...] } or an array depending on backend
+        this.tasks = Array.isArray(updatesResp) ? updatesResp : (updatesResp.updates || updatesResp || [])
+
+        // Flatten members from projects (or rely on member API if you add one later)
+        this.teamMembers = this.projects.flatMap(p => p.team || [])
+
+        // Deadlines: take tasks that contain due_date / deadline fields
+        this.deadlines = (this.tasks || []).filter(t => t.due_date || t.deadline || t.dueDate)
+          .map(t => ({
+            title: t.title || t.task_name || t.description || 'Untitled',
+            dueDate: new Date(t.due_date || t.deadline || t.dueDate).toLocaleDateString(),
+            project: t.project_name || t.project || 'Unassigned',
+            status: this.computeDeadlineStatus(t.due_date || t.deadline || t.dueDate)
+          }))
+
+        // Stats
+        const activeProjects = (this.projects.filter(p => (p.state || p.status || '').toLowerCase() === 'active')).length
+        const totalTasks = (this.tasks || []).length
+        const totalMembers = this.uniqueTeamMembers.length
+        const completedTasks = (this.tasks || []).filter(t => (t.state || '').toLowerCase() === 'complete').length
+        const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0
+
+        this.stats = [
+          { label: 'Active Projects', value: activeProjects, color: 'var(--primary)' },
+          { label: 'Total Tasks', value: totalTasks, color: 'var(--primary)' },
+          { label: 'Team Members', value: totalMembers, color: 'var(--success)' },
+          { label: 'Completion Rate', value: `${completionRate}%`, color: 'var(--warning)' }
+        ]
+
+        // ensure chart is created after DOM update
+        this.$nextTick(() => this.initChart())
+      } catch (err) {
+        this.error = err.message || 'Failed to fetch dashboard data'
+      } finally {
+        this.loading = false
+      }
+    },
+
+    computeDeadlineStatus(dueDate) {
+      if (!dueDate) return 'Unknown'
+      const now = new Date()
+      const d = new Date(dueDate)
+      const diff = (d - now) / (1000 * 60 * 60 * 24)
+      if (diff < 0) return 'Overdue'
+      if (diff <= 2) return `${Math.ceil(diff)} days left`
+      return `${Math.ceil(diff)} days left`
+    },
+
+    initChart() {
+      const canvas = this.$refs.chartCanvas
+      if (!canvas) return
+
+      // destroy previous instance
+      if (this.chartInstance) {
+        try { this.chartInstance.destroy() } catch (e) { /* ignore */ }
+        this.chartInstance = null
+      }
+
+      const ctx = canvas.getContext('2d')
+      // Compute counts by state (lowercase keys)
+      const stateCounts = (this.projects || []).reduce((acc, p) => {
+        const state = (p.state || p.status || 'unknown').toLowerCase()
+        acc[state] = (acc[state] || 0) + 1
+        return acc
+      }, {})
+
+      const labels = Object.keys(stateCounts)
+      const data = Object.values(stateCounts)
+
+      // Provide a consistent palette length — map labels to the palette in order
+      const palette = [
+        'rgba(108, 117, 125, 0.7)', // tentative / neutral
+        'rgba(230, 57, 70, 0.7)',   // delayed / danger
+        'rgba(73, 80, 246, 0.7)',   // in progress / primary
+        'rgba(247, 37, 133, 0.7)',  // overdue
+        'rgba(76, 201, 240, 0.7)'   // complete
+      ]
+
+      const bg = labels.map((_, i) => palette[i % palette.length])
+
+      this.chartInstance = new Chart(ctx, {
         type: 'doughnut',
         data: {
-          labels: ['Tentative', 'Delayed', 'In Progress', 'Overdue', 'Complete'],
+          labels,
           datasets: [{
-            data: [15, 10, 30, 8, 37],
-            backgroundColor: [
-              'rgba(108, 117, 125, 0.7)',
-              'rgba(230, 57, 70, 0.7)',
-              'rgba(73, 80, 246, 0.7)',
-              'rgba(247, 37, 133, 0.7)',
-              'rgba(76, 201, 240, 0.7)'
-            ],
-            borderColor: [
-              'rgba(108, 117, 125, 1)',
-              'rgba(230, 57, 70, 1)',
-              'rgba(73, 80, 246, 1)',
-              'rgba(247, 37, 133, 1)',
-              'rgba(76, 201, 240, 1)'
-            ],
-            borderWidth: 1
+            data,
+            backgroundColor: bg,
+            borderWidth: 0
           }]
         },
         options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: {
-              position: 'right',
-              labels: {
-                color: isDark.value ? '#ffffff' : '#102530'
-              }
-            },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  return `${context.label}: ${context.parsed}%`;
-                }
-              }
-            }
-          }
+          plugins: { legend: { display: false } },
+          cutout: '60%'
         }
-      });
-    };
+      })
+    },
 
-    onMounted(() => {
-      // Load theme preference
-      const savedTheme = localStorage.getItem("zainpm-theme");
-      if (savedTheme === "light") {
-        isDark.value = false;
+    formatDate(date) {
+      if (!date) return 'N/A'
+      try {
+        const d = (date instanceof Date) ? date : new Date(date)
+        return d.toLocaleDateString()
+      } catch (e) {
+        return String(date)
       }
-      
-      // Initialize chart
-      initChart();
-    });
+    },
 
-    // Update chart when theme changes
-    watch(isDark, () => {
-      initChart();
-    });
+    formatDateKey(date) {
+      if (!date) return ''
+      try {
+        const d = (date instanceof Date) ? date : new Date(date)
+        return d.toISOString().slice(0, 10)
+      } catch (e) {
+        return String(date)
+      }
+    },
 
-    return {
-      isDark,
-      toggleTheme,
-      stats,
-      legendItems,
-      projects,
-      tasks,
-      teamMembers,
-      deadlines,
-      chartCanvas
-    };
+    priorityClass(priority) {
+      if (!priority) return ''
+      const p = String(priority).toLowerCase()
+      if (p.includes('high')) return 'priority-high'
+      if (p.includes('medium')) return 'priority-medium'
+      return 'priority-low'
+    }
+  },
+
+  mounted() {
+    const saved = localStorage.getItem('zainpm-theme')
+    this.isDark = saved ? saved === 'dark' : this.isDark
+    this.fetchDashboardData()
+  },
+
+  beforeUnmount() {
+    if (this.chartInstance) {
+      try {
+        this.chartInstance.destroy()
+      } catch (e) {
+        /* ignore destroy errors */
+      }
+      this.chartInstance = null
+    }
   }
-};
+}
 </script>
 
 <style scoped>

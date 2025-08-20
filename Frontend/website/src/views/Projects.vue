@@ -106,19 +106,79 @@
               <label>Project Name *</label>
               <input v-model="newProject.project_name" type="text" required />
             </div>
-            <div class="form-group">
-              <label>Start Date</label>
-              <input v-model="newProject.start_date" type="date" />
+
+            <div class="form-row" style="display:flex; gap:12px;">
+              <div class="form-group" style="flex:1">
+                <label>Start Date</label>
+                <input v-model="newProject.start_date" type="date" />
+              </div>
+              <div class="form-group" style="width:220px;">
+                <label>Timezone</label>
+                <select v-model="newProject.timezone">
+                  <option value="Africa/Addis_Ababa">Africa/Addis_Ababa</option>
+                  <option value="UTC">UTC</option>
+                  <option value="America/New_York">America/New_York</option>
+                  <option value="Europe/London">Europe/London</option>
+                </select>
+              </div>
             </div>
-            <div class="form-group">
-              <label>Timezone</label>
-              <select v-model="newProject.timezone">
-                <option value="Africa/Addis_Ababa">Africa/Addis_Ababa</option>
-                <option value="UTC">UTC</option>
-                <option value="America/New_York">America/New_York</option>
-                <option value="Europe/London">Europe/London</option>
-              </select>
+
+            <div class="form-row" style="display:flex; gap:12px;">
+              <div class="form-group" style="flex:1;">
+                <label>Project Type</label>
+                <select v-model="newProject.project_type">
+                  <option value="scheduled">Scheduled</option>
+                  <option value="documented">Documented</option>
+                </select>
+              </div>
+              <div class="form-group" style="width:180px;">
+                <label>Initial State</label>
+                <select v-model="newProject.state">
+                  <option value="tentative">Tentative</option>
+                  <option value="active">Active</option>
+                  <option value="paused">Paused</option>
+                </select>
+              </div>
             </div>
+
+            <div class="form-group">
+              <label>Objectives</label>
+              <div style="display:flex; gap:8px; align-items:center;">
+                <input v-model="newProject.objective_input" type="text" placeholder="Add objective..." />
+                <AppButton type="button" @click="() => { if (newProject.objective_input.trim()) { newProject.objectives.push(newProject.objective_input.trim()); newProject.objective_input=''; } }">Add</AppButton>
+              </div>
+              <ul style="margin-top:8px;">
+                <li v-for="(o, idx) in newProject.objectives" :key="idx" style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                  <span>{{ o }}</span>
+                  <AppButton type="button" @click="() => newProject.objectives.splice(idx,1)">Remove</AppButton>
+                </li>
+              </ul>
+            </div>
+
+            <div class="form-row" style="display:flex; gap:12px;">
+              <div class="form-group" style="flex:1;">
+                <label>Expected Duration</label>
+                <div style="display:flex; gap:8px;">
+                  <input v-model="newProject.expected_duration_value" type="number" min="0" placeholder="e.g. 8" />
+                  <select v-model="newProject.expected_duration_unit">
+                    <option value="minutes">Minutes</option>
+                    <option value="hours">Hours</option>
+                    <option value="days">Days</option>
+                  </select>
+                </div>
+                <small class="text-muted">Enter a numeric value and unit; we'll convert to minutes for the backend.</small>
+              </div>
+              <div class="form-group" style="width:220px;">
+                <label>Estimated Cost</label>
+                <input v-model="newProject.total_estimated_cost" type="number" min="0" step="0.01" placeholder="0.00" />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Team Members (comma-separated emails)</label>
+              <input v-model="newProject.team_input" type="text" placeholder="alice@example.com, bob@example.com" />
+            </div>
+
             <div class="modal-actions">
               <AppButton type="button" @click="showCreateModal = false">Cancel</AppButton>
               <AppButton type="submit" :disabled="createLoading" variant="primary">
@@ -140,16 +200,15 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue';
-import Sidebar from '@/components/layout/Sidebar.vue';
-import AppHeader from '@/components/layout/AppHeader.vue';
-import ThemeToggle from '@/components/layout/ThemeToggle.vue';
-import StateBadge from '@/components/ui/StateBadge.vue';
-import AppButton from '@/components/ui/AppButton.vue';
-import ProjectModal from '@/components/projects/ProjectModal.vue';
-import { projectService } from '@/services/projects';
-import { useUserStore } from '@/store/user';
-import { authService } from '@/services/auth';
+import Sidebar from '@/components/layout/Sidebar.vue'
+import AppHeader from '@/components/layout/AppHeader.vue'
+import ThemeToggle from '@/components/layout/ThemeToggle.vue'
+import StateBadge from '@/components/ui/StateBadge.vue'
+import AppButton from '@/components/ui/AppButton.vue'
+import ProjectModal from '@/components/projects/ProjectModal.vue'
+import { projectService } from '@/services/projects'
+import { useUserStore } from '@/store/user'
+import { authService } from '@/services/auth'
 
 export default {
   name: 'ProjectsPage',
@@ -161,173 +220,195 @@ export default {
     AppButton,
     ProjectModal,
   },
-  setup() {
-    const userStore = useUserStore();
 
-    // Theme
-    const isDark = ref(true);
-    const toggleTheme = () => {
-      isDark.value = !isDark.value;
-      localStorage.setItem('zainpm-theme', isDark.value ? 'dark' : 'light');
-    };
+  data() {
+    return {
+      // Theme
+      isDark: true,
 
-    // Data & State
-    const projects = ref([]);
-    const loading = ref(false);
-    const error = ref(null);
-    const showCreateModal = ref(false);
-    const createLoading = ref(false);
-    const selectedProject = ref(null);
+      // Data & State
+      projects: [],
+      loading: false,
+      error: null,
+      showCreateModal: false,
+      createLoading: false,
+      selectedProject: null,
 
-    // Filters
-    const searchQuery = ref('');
-    const statusFilter = ref('');
-    const sortBy = ref('name');
-    const statusOptions = [
-      'Planning', 'Tentative', 'In Progress', 'Delayed', 'Overdue', 'Complete', 'Not Started'
-    ];
+      // Filters
+      searchQuery: '',
+      statusFilter: '',
+      sortBy: 'name',
+      statusOptions: [
+        'Planning', 'Tentative', 'In Progress', 'Delayed', 'Overdue', 'Complete', 'Not Started'
+      ],
 
-    // New Project form
-    const newProject = ref({ project_name: '', start_date: '', timezone: 'Africa/Addis_Ababa' });
+      // New Project form
+      newProject: {
+        project_name: '',
+        start_date: '',
+        timezone: 'Africa/Addis_Ababa',
+        project_type: 'scheduled',        // scheduled | documented
+        objectives: [],                   // array of strings
+        objective_input: '',
+        team_input: '',
+        expected_duration_value: '',      // numeric value
+        expected_duration_unit: 'hours',  // minutes | hours | days
+        total_estimated_cost: '',
+        state: 'tentative'
+      },
 
-    // Fetch projects
-    const loadProjects = async () => {
-      loading.value = true;
-      error.value = null;
-      const user = authService.getCurrentUser();
+      userStore: useUserStore()
+    }
+  },
+
+  computed: {
+    filteredProjects() {
+      let res = this.projects.slice()
+      if (this.searchQuery) {
+        const q = this.searchQuery.toLowerCase()
+        res = res.filter(p => (p.name || '').toLowerCase().includes(q))
+      }
+      if (this.statusFilter) {
+        res = res.filter(p => p.status === this.statusFilter)
+      }
+      if (this.sortBy === 'name') {
+        res.sort((a, b) => (a.name || '').localeCompare(b.name || ''))
+      } else if (this.sortBy === 'startDate') {
+        res.sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+      } else if (this.sortBy === 'endDate') {
+        res.sort((a, b) => new Date(a.endDate) - new Date(b.endDate))
+      }
+      return res
+    }
+  },
+
+  methods: {
+    toggleTheme() {
+      this.isDark = !this.isDark
+      localStorage.setItem('zainpm-theme', this.isDark ? 'dark' : 'light')
+    },
+
+    async loadProjects() {
+      this.loading = true
+      this.error = null
+      const user = authService.getCurrentUser()
       if (!user || !user.company_name) {
-        error.value = 'User not authenticated or company name missing';
-        loading.value = false;
-        return;
+        this.error = 'User not authenticated or company name missing'
+        this.loading = false
+        return
       }
       try {
-        const resp = await projectService.getProjects(user.company_name);
-        const projectsData = resp.projects || [];
-    
-        // Add default properties for projects that might be missing them
-        projects.value = projectsData.map(project => ({
+        const resp = await projectService.getProjects(user.company_name)
+        const projectsData = resp.projects || []
+        this.projects = projectsData.map(project => ({
           ...project,
           status: project.status || 'Not Started',
           progress: project.progress || 0,
           tasks: project.tasks || [],
           team: project.team || []
-        }));
+        }))
       } catch (e) {
-        error.value = e.message || 'Failed to load projects';
+        this.error = e.message || 'Failed to load projects'
       } finally {
-        loading.value = false;
+        this.loading = false
       }
-    };
+    },
 
-    // Create project
-    const createProject = async () => {
-      console.log('Attempting to create new project...');
-      createLoading.value = true;
-      error.value = null;
-      
-      // Enhanced debugging
-      console.log('=== PROJECT CREATION DEBUG ===');
-      console.log('User store state:', {
-        user: userStore.user,
-        isAuthenticated: userStore.isAuthenticated,
-        companyName: userStore.companyName
-      });
-      console.log('localStorage access_token:', localStorage.getItem('access_token') ? 'Present' : 'Missing');
-      console.log('localStorage user_data:', localStorage.getItem('user_data'));
-      
-      // Try to get company name with fallback
-      let companyName = userStore.currentUser?.company_name || userStore.companyName;
-      
+    async createProject() {
+      this.createLoading = true
+      this.error = null
+
+      let companyName = this.userStore.currentUser?.company_name || this.userStore.companyName
       if (!companyName) {
-        console.warn('Company name is missing, attempting to re-initialize auth');
-        // Try to re-initialize auth
-        userStore.initializeAuth();
-        companyName = userStore.currentUser?.company_name || userStore.companyName;
-        
+        this.userStore.initializeAuth()
+        companyName = this.userStore.currentUser?.company_name || this.userStore.companyName
         if (!companyName) {
-          console.error('Failed to restore company name');
-          alert('Cannot create project: company name missing. Please log in again.');
-          createLoading.value = false;
-          return;
+          alert('Cannot create project: company name missing. Please log in again.')
+          this.createLoading = false
+          return
         }
-        console.log('Successfully restored company name:', companyName);
       }
 
       try {
-        // Convert date string to proper format
-        let startDate = null;
-        if (newProject.value.start_date) {
-        startDate = newProject.value.start_date;
+        // Convert date string
+        let startDate = this.newProject.start_date || null
+
+        // Convert expected duration
+        let expectedDuration = null
+        if (this.newProject.expected_duration_value !== '') {
+          const v = Number(this.newProject.expected_duration_value)
+          if (!Number.isFinite(v) || v < 0) throw new Error('Expected duration must be non-negative')
+          const unit = this.newProject.expected_duration_unit
+          if (unit === 'minutes') expectedDuration = Math.round(v)
+          else if (unit === 'hours') expectedDuration = Math.round(v * 60)
+          else if (unit === 'days') expectedDuration = Math.round(v * 60 * 24)
         }
 
+        // Normalize team input
+        const teamArr = (this.newProject.team_input || '')
+          .split(',')
+          .map(s => s.trim())
+          .filter(Boolean)
+
         const payload = {
-          project_name: newProject.value.project_name,
+          project_name: this.newProject.project_name,
           start_date: startDate,
-          timezone: newProject.value.timezone,
+          timezone: this.newProject.timezone,
           company_name: companyName,
+          project_type: this.newProject.project_type || 'scheduled',
+          objectives: this.newProject.objectives || [],
+          expected_duration: expectedDuration,
+          total_estimated_cost: this.newProject.total_estimated_cost ? Number(this.newProject.total_estimated_cost) : undefined,
+          team: teamArr,
+          state: this.newProject.state
+        }
+
+        const response = await projectService.createProject(payload)
+        if (response && response.project_id) {
+          // Optionally show a success message
+          alert(`Project "${response.project_name}" created!`)
+        }
+        this.showCreateModal = false
+        this.newProject = {
+          project_name: '',
+          start_date: '',
+          timezone: 'Africa/Addis_Ababa',
           project_type: 'scheduled',
-          objectives: []
-        };
-
-        console.log('Project Payload:', payload);
-        console.log('Calling projectService.createProject...');
-        const response = await projectService.createProject(payload);
-        console.log('Project creation successful:', response);
-        showCreateModal.value = false;
-        newProject.value = { project_name: '', start_date: '', timezone: 'Africa/Addis_Ababa' };
-        await loadProjects();
+          objectives: [],
+          objective_input: '',
+          team_input: '',
+          expected_duration_value: '',
+          expected_duration_unit: 'hours',
+          total_estimated_cost: '',
+          state: 'tentative'
+        }
+        await this.loadProjects()
       } catch (e) {
-        console.error('Error during project creation:', e);
-        const errorMessage = e.message || e.toString() || 'Unknown error occurred';
-        alert('Failed to create project: ' + errorMessage);
-        error.value = errorMessage; // Also set the error state for UI display
+        const errorMessage = e.message || e.toString() || 'Unknown error occurred'
+        alert('Failed to create project: ' + errorMessage)
+        this.error = errorMessage
       } finally {
-        createLoading.value = false;
-        console.log('Exiting createProject method.');
+        this.createLoading = false
       }
-    };
+    },
 
-    // Select for detail view
-    const selectProject = (p) => selectedProject.value = p;
+    selectProject(p) {
+      this.selectedProject = p
+    },
 
-    // Computed filtered and sorted
-    const filteredProjects = computed(() => {
-      let res = projects.value.slice();
-      if (searchQuery.value) {
-        const q = searchQuery.value.toLowerCase();
-        res = res.filter(p => p.name.toLowerCase().includes(q));
-      }
-      if (statusFilter.value) res = res.filter(p => p.status === statusFilter.value);
-      if (sortBy.value === 'name') res.sort((a,b)=>a.name.localeCompare(b.name));
-      else if (sortBy.value === 'startDate') res.sort((a,b)=>new Date(a.startDate)-new Date(b.startDate));
-      else if (sortBy.value === 'endDate') res.sort((a,b)=>new Date(a.endDate)-new Date(b.endDate));
-      return res;
-    });
-
-    // Date formatting
-    const formatDate = d => d ? new Date(d).toLocaleDateString() : 'N/A';
-
-    onMounted(() => {
-      const saved = localStorage.getItem('zainpm-theme');
-      if (saved === 'light') isDark.value = false;
-      loadProjects();
-    });
-
-    return {
-      isDark, toggleTheme,
-      projects, loading, error,
-      showCreateModal, createLoading,
-      selectedProject,
-      searchQuery, statusFilter, sortBy, statusOptions,
-      newProject,
-      filteredProjects,
-      loadProjects, createProject, selectProject,
-      formatDate,
-      userStore
-    };
+    formatDate(d) {
+      return d ? new Date(d).toLocaleDateString() : 'N/A'
+    }
   },
-};
+
+  mounted() {
+    const saved = localStorage.getItem('zainpm-theme')
+    this.isDark = saved === 'light' ? false : true
+    this.loadProjects()
+  }
+}
 </script>
+
 
 <style scoped>
 .projects-page {

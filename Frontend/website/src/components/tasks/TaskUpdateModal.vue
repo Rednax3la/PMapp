@@ -1,43 +1,29 @@
 //Frontend/website/src/components/tasks/TaskUpdateModal.vue
 <template>
-  <div class="modal-overlay" @click="$emit('close')">
-    <div class="modal" @click.stop>
-      <h3>Update Task: {{ task.name }}</h3>
-      
-      <form @submit.prevent="createUpdate" class="task-form">
+  <div class="modal-overlay">
+    <div class="modal">
+      <h3>Create Update</h3>
+      <form @submit.prevent="createUpdate">
         <div class="form-group">
-          <label>Status Percentage (0–100) *</label>
-          <input 
-            v-model="updateData.status_percentage" 
-            type="number" min="0" max="100" required 
-          />
+          <label>Progress (%)</label>
+          <input v-model.number="updateData.status_percentage" type="number" min="0" max="100" />
         </div>
 
         <div class="form-group">
           <label>Description</label>
-          <textarea v-model="updateData.description" rows="4" placeholder="Describe progress…"></textarea>
+          <textarea v-model="updateData.description" rows="3"></textarea>
         </div>
 
         <div class="form-group">
-          <label>Upload Images</label>
-          <input ref="fileInput" type="file" multiple accept="image/*" @change="handleFileSelect" />
-          <div v-if="selectedFiles.length" class="file-list">
-            <h4>Selected Files</h4>
+          <label>Attach Images</label>
+          <input ref="fileInput" type="file" multiple @change="handleFileSelect" />
+          <div class="file-list" v-if="selectedFiles.length">
             <ul>
-              <li v-for="(f,i) in selectedFiles" :key="i">
-                {{ f.name }}
-                <button type="button" @click="removeFile(i)">&times;</button>
+              <li v-for="(f, i) in selectedFiles" :key="f.name">
+                {{ f.name }} <button type="button" @click="removeFile(i)">&times;</button>
               </li>
             </ul>
           </div>
-        </div>
-
-        <div class="form-group">
-          <label>Current Progress</label>
-          <div class="progress-bar">
-            <div class="progress-fill" :style="{ width: currentProgress+'%' }"></div>
-          </div>
-          <small>{{ currentProgress }}%</small>
         </div>
 
         <div class="modal-actions">
@@ -54,6 +40,7 @@
 <script>
 import AppButton from '@/components/ui/AppButton.vue'
 import { taskService } from '@/services/tasks'
+import { useUserStore } from '@/store/user'
 import { authService } from '@/services/auth'
 
 export default {
@@ -65,33 +52,39 @@ export default {
     return {
       loading: false,
       selectedFiles: [],
-      updateData: { status_percentage: this.task.progress||0, description: '' },
-      currentProgress: this.task.progress||0
+      updateData: { status_percentage: this.task?.progress || 0, description: '' },
+      currentProgress: this.task?.progress || 0
     }
   },
   methods: {
     handleFileSelect(e) {
-      this.selectedFiles = Array.from(e.target.files)
+      this.selectedFiles = Array.from(e.target.files || [])
     },
     removeFile(i) {
       this.selectedFiles.splice(i,1)
-      this.$refs.fileInput.value = ''
+      if (this.$refs.fileInput) this.$refs.fileInput.value = ''
     },
     async createUpdate() {
       this.loading = true
       try {
-        const user = authService.getCurrentUser()
+        // get company
+        const userStore = useUserStore()
+        const userData = userStore?.currentUser || userStore?.user || authService.getCurrentUser() || {}
+        const companyName = userData?.company_name || userData?.company
+        if (!companyName) throw new Error('Missing company info')
+
         const payload = {
           ...this.updateData,
-          company_name: user.company_name,
-          project_name: this.task.project,
-          task_name: this.task.name
+          company_name: companyName,
+          project_name: this.task?.project,
+          task_name: this.task?.name || this.task?.task_name || this.task?.title
         }
+
         const res = await taskService.createTaskUpdate(payload, this.selectedFiles)
         this.$emit('update-created', res)
         this.$emit('close')
       } catch (e) {
-        alert('Failed to update task: '+e)
+        alert('Failed to update task: ' + (e?.message || e))
       } finally {
         this.loading = false
       }
