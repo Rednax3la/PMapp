@@ -70,9 +70,9 @@ export const projectService = {
     try {
       const payload = { company_name: companyName }
       if (projectName) payload.project_name = projectName
-      
+    
       const response = await api.post('/projects/latest_updates', payload)
-      return response.data
+      return Array.isArray(response.data) ? response.data : [];
     } catch (error) {
       throw new Error(error.response?.data?.error || error.response?.data?.message || 'Failed to fetch updates')
     }

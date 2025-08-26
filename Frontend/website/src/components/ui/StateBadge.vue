@@ -62,70 +62,71 @@ export default {
   white-space: nowrap;
 }
 
+/* === Consistent with chart colors === */
 .state-complete {
-  background: rgba(34, 197, 94, 0.1);
-  color: #22c55e;
-  border: 1px solid rgba(34, 197, 94, 0.2);
+  background: rgba(76, 201, 240, 0.15);
+  color: rgb(76, 201, 240);
+  border: 1px solid rgba(76, 201, 240, 0.4);
 }
 
 .state-active {
-  background: rgba(59, 130, 246, 0.1);
-  color: #3b82f6;
-  border: 1px solid rgba(59, 130, 246, 0.2);
+  background: rgba(73, 80, 246, 0.15);
+  color: rgb(73, 80, 246);
+  border: 1px solid rgba(73, 80, 246, 0.4);
 }
 
 .state-tentative {
-  background: rgba(251, 191, 36, 0.1);
-  color: #fbbf24;
-  border: 1px solid rgba(251, 191, 36, 0.2);
+  background: rgba(108, 117, 125, 0.15);
+  color: rgb(108, 117, 125);
+  border: 1px solid rgba(108, 117, 125, 0.4);
 }
 
 .state-delayed {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.2);
+  background: rgba(230, 57, 70, 0.15);
+  color: rgb(230, 57, 70);
+  border: 1px solid rgba(230, 57, 70, 0.4);
 }
 
 .state-not-started {
-  background: rgba(156, 163, 175, 0.1);
+  background: rgba(156, 163, 175, 0.15);
   color: #9ca3af;
-  border: 1px solid rgba(156, 163, 175, 0.2);
+  border: 1px solid rgba(156, 163, 175, 0.4);
 }
 
 .state-unknown {
-  background: rgba(107, 114, 128, 0.1);
+  background: rgba(107, 114, 128, 0.15);
   color: #6b7280;
-  border: 1px solid rgba(107, 114, 128, 0.2);
+  border: 1px solid rgba(107, 114, 128, 0.4);
 }
 
-/* Dark mode adjustments */
+/* Dark mode adjustments (slightly stronger backgrounds) */
 .dark .state-complete {
-  background: rgba(34, 197, 94, 0.2);
-  color: #4ade80;
+  background: rgba(76, 201, 240, 0.25);
+  color: rgb(125, 220, 250);
 }
 
 .dark .state-active {
-  background: rgba(59, 130, 246, 0.2);
-  color: #60a5fa;
+  background: rgba(73, 80, 246, 0.25);
+  color: rgb(120, 130, 250);
 }
 
 .dark .state-tentative {
-  background: rgba(251, 191, 36, 0.2);
-  color: #fcd34d;
+  background: rgba(108, 117, 125, 0.25);
+  color: rgb(180, 185, 190);
 }
 
 .dark .state-delayed {
-  background: rgba(239, 68, 68, 0.2);
-  color: #f87171;
+  background: rgba(230, 57, 70, 0.25);
+  color: rgb(240, 100, 115);
 }
 
 .dark .state-not-started {
-  background: rgba(156, 163, 175, 0.2);
+  background: rgba(156, 163, 175, 0.25);
   color: #d1d5db;
 }
 
 .dark .state-unknown {
-  background: rgba(107, 114, 128, 0.2);
+  background: rgba(107, 114, 128, 0.25);
   color: #d1d5db;
 }
 </style>

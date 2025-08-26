@@ -291,55 +291,33 @@ export default {
     const loadTasks = async () => {
       loading.value = true;
       error.value = null;
-      
       try {
         const user = authService.getCurrentUser();
-        if (!user) {
-          // Handle redirect to login if needed
-          return;
-        }
-        
-        // Load tasks from all projects
+        if (!user) return;
+
+        const projectData = await projectService.getProjects(user.company_name);  // UPDATED: Call once
         const allTasks = [];
-        for (const project of projects.value) {
-          try {
-            const projectData = await projectService.getProjects(user.company_name);
-            const proj = projectData.projects.find(p => p.name === project.name);
-            if (proj && proj.tasks) {
-              proj.tasks.forEach(task => {
-                allTasks.push({
-                  ...task,
-                  project: project.name,
-                  dueDate: calculateDueDate(task.start_time, task.expected_duration),
-                  progress: getTaskProgress(task.id)
-                });
+
+        for (const project of projectData.projects || []) {  // UPDATED: Loop over fetched projects
+          if (project.tasks) {
+            project.tasks.forEach(task => {
+              allTasks.push({
+                ...task,
+                project: project.name,
+                dueDate: calculateDueDate(task.start_time, task.expected_duration_minutes),  // UPDATED: Use minutes
+                progress: task.progress,  // UPDATED: Use backend-provided progress (remove getTaskProgress call)
+                status: task.status  // NEW: Use backend-provided status
               });
-            }
-          } catch (error) {
-            console.error(`Failed to load tasks for project ${project.name}:`, error);
+            });
           }
         }
-        
+
         tasks.value = allTasks;
       } catch (e) {
         error.value = e.message || 'Failed to load tasks';
       } finally {
         loading.value = false;
       }
-    };
-
-    const getTaskStatus = (taskId) => {
-      // This function would call your backend's get_task_state function
-      // For now, return a mock status based on progress
-      const task = tasks.value.find(t => t.id === taskId);
-      if (task) {
-        const progress = task.progress || 0;
-        if (progress === 100) return 'complete';
-        if (progress > 0) return 'in-progress';
-        if (new Date() > new Date(task.dueDate)) return 'overdue';
-        return 'tentative';
-      }
-      return 'tentative';
     };
 
     const markTaskAs = async (task, state) => {
@@ -402,22 +380,11 @@ export default {
       loadTasks();
     };
 
-    const calculateDueDate = (startTime, duration) => {
-      if (!startTime || !duration) return null;
+    const calculateDueDate = (startTime, durationMinutes) => {
+      if (!startTime || !durationMinutes) return null;
       const start = new Date(startTime);
-      const due = new Date(start.getTime() + (duration * 60 * 60 * 1000));
+      const due = new Date(start.getTime() + durationMinutes * 60000);
       return due.toISOString();
-    };
-
-    const getTaskProgress = (taskId) => {
-      // This would typically come from the backend
-      // For now, return a default value based on task updates
-      const task = tasks.value.find(t => t.id === taskId);
-      if (task && task.updates && task.updates.length > 0) {
-        // Get the latest update's status_percentage
-        return task.latest_progress || 0;
-      }
-      return Math.floor(Math.random() * 100);
     };
 
     const formatDate = (dateStr) => {
@@ -471,7 +438,6 @@ export default {
       onUpdateCreated,
       formatDate,
       getPriorityClass,
-      getTaskStatus,
       createTaskUpdate
     };
   }

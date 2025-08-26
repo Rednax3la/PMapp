@@ -263,6 +263,22 @@ export default {
       } finally {
         this.loading = false
       }
+    },
+    resetForm() {  // NEW: Reset on close
+      this.taskData = {
+        project_name: '',
+        task_name: '',
+        expected_duration: '',
+        start_time: '',
+        priority: 'medium',
+        description: '',
+        members: [],
+        dependencies: [],
+        estimated_cost: 0
+      };
+      this.memberInput = '';
+      this.dependencyInput = '';
+      this.localError = '';
     }
   }
 }

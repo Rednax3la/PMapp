@@ -87,6 +87,7 @@ projects_col = db['projects']
 tasks_col = db['tasks']
 updates_col = db['updates']
 project_updates_col = db['project_updates']
+teams_col = db['teams']
 
 # Create indexes for better performance
 def create_indexes():

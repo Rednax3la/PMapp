@@ -1,6 +1,7 @@
 # scheduling-api/helpers.py
 import os
 import uuid
+import re
 from flask import current_app
 from werkzeug.utils import secure_filename 
 
@@ -39,6 +40,10 @@ def save_uploaded_file(file, task_id=None, update_count=None, image_count=None):
 
 def format_duration(minutes: int) -> str:
     """Convert minutes to human-readable format: Xmonths Xdays Xhours Xminutes"""
+    if not isinstance(minutes, (int, float)) or minutes < 0:
+        return "0 minutes"
+        
+    minutes = int(minutes)
     months = minutes // (30*24*60)
     remaining = minutes % (30*24*60)
     days = remaining // (24*60)
@@ -59,66 +64,93 @@ def format_duration(minutes: int) -> str:
     return " ".join(parts) if parts else "0 minutes"
 
 def parse_duration(duration_str: str) -> int:
-    """Convert duration string to minutes"""
-    minutes = 0
-    parts = duration_str.lower().split()
+    """
+    FIXED: Convert duration string to minutes with better parsing
+    Supports formats like:
+    - "2 hours 30 minutes"
+    - "1 day"
+    - "3 weeks"
+    - "2 months"
+    - "90 minutes"
+    - "1.5 hours"
+    """
+    if not duration_str or not isinstance(duration_str, str):
+        raise ValueError("Duration string cannot be empty or null")
     
-    # Define conversion factors
+    duration_str = duration_str.lower().strip()
+    if not duration_str:
+        raise ValueError("Duration string cannot be empty")
+    
+    # Define conversion factors (in minutes)
     units = {
-        'month': 30*24*60,
-        'months': 30*24*60,
-        'week': 7*24*60,
-        'weeks': 7*24*60,
-        'day': 24*60,
-        'days': 24*60,
-        'hour': 60,
-        'hours': 60,
-        'minute': 1,
-        'minutes': 1
+        'minute': 1, 'minutes': 1, 'min': 1, 'mins': 1,
+        'hour': 60, 'hours': 60, 'hr': 60, 'hrs': 60,
+        'day': 24*60, 'days': 24*60,
+        'week': 7*24*60, 'weeks': 7*24*60,
+        'month': 30*24*60, 'months': 30*24*60,
+        'year': 365*24*60, 'years': 365*24*60
     }
     
-    i = 0
-    while i < len(parts):
-        try:
-            # Try to parse number
-            value = int(parts[i])
-            i += 1
-            
-            # Check if next part is a unit
-            if i < len(parts) and parts[i] in units:
-                unit = parts[i]
-                minutes += value * units[unit]
-                i += 1
-            # Handle cases like "3 months" where unit comes after number
-            elif i-2 >= 0 and parts[i-2] in units:
-                unit = parts[i-2]
-                minutes += value * units[unit]
-        except ValueError:
-            # Handle cases where unit comes before number (e.g., "months 3")
-            if parts[i] in units and i+1 < len(parts):
-                try:
-                    value = int(parts[i+1])
-                    minutes += value * units[parts[i]]
-                    i += 2
-                except ValueError:
-                    i += 1
-            else:
-                i += 1
+    total_minutes = 0
     
-    if minutes <= 0:
+    # Use regex to find all number-unit pairs
+    # This pattern matches: optional decimal numbers followed by optional spaces and unit names
+    pattern = r'(\d+(?:\.\d+)?)\s*([a-zA-Z]+)'
+    matches = re.findall(pattern, duration_str)
+    
+    if not matches:
+        # Try to handle pure numbers (assume minutes)
+        number_match = re.search(r'(\d+(?:\.\d+)?)', duration_str)
+        if number_match:
+            try:
+                value = float(number_match.group(1))
+                if value <= 0:
+                    raise ValueError("Duration must be positive")
+                return int(value)  # Assume minutes
+            except ValueError:
+                raise ValueError("Invalid duration format")
+        else:
+            raise ValueError("No valid duration found in string")
+    
+    for value_str, unit_str in matches:
+        try:
+            value = float(value_str)
+            if value <= 0:
+                raise ValueError("Duration values must be positive")
+                
+            # Find matching unit
+            unit_found = False
+            for unit_key, multiplier in units.items():
+                if unit_str.startswith(unit_key) or unit_key.startswith(unit_str):
+                    total_minutes += value * multiplier
+                    unit_found = True
+                    break
+            
+            if not unit_found:
+                # If unit not recognized, assume it's a number without unit (minutes)
+                total_minutes += value
+                
+        except ValueError as e:
+            raise ValueError(f"Invalid numeric value: {value_str}")
+    
+    if total_minutes <= 0:
         raise ValueError("Duration must be positive")
-    return minutes
+        
+    return int(total_minutes)
 
 # Modified to return all images for a task
-def get_task_images(task_id: int):
-    from createandget import get_task, updates_db
+def get_task_images(task_id: str):
+    """Get all image filenames for a task"""
+    from createandget import get_task
+    from db import updates_col
+    
     task = get_task(task_id)
     if not task:
         return []
     
     images = []
     for update_id in task['updates']:
-        update = updates_db.get(update_id)
+        update = updates_col.find_one({"id": update_id})
         if update and update.get('image_filenames'):
             images.extend(update['image_filenames'])
             

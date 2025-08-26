@@ -144,21 +144,6 @@
             Passwords do not match
           </small>
         </div>
-
-        <div class="form-group">
-          <label for="register-role">Role</label>
-          <select 
-            id="register-role"
-            v-model="registerForm.role" 
-            required
-            :disabled="loading"
-          >
-            <option value="">Select your role</option>
-            <option value="admin">Admin</option>
-            <option value="manager">Manager</option>
-            <option value="member">Team Member</option>
-          </select>
-        </div>
         
         <button 
           type="submit" 

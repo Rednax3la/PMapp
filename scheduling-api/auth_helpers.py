@@ -20,7 +20,7 @@ def hash_password(raw_password):
 def check_password(raw_password, hashed):
     return bcrypt.checkpw(raw_password.encode('utf-8'), hashed.encode('utf-8'))
 
-def create_user(username_email, password, company_name, role):
+def create_user(username_email, password, company_name, role="admin"):
     u = normalize_email(username_email)
     if not is_valid_email(u):
         raise ValueError("username must be a valid email address")

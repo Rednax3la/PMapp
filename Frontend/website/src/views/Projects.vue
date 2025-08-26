@@ -84,6 +84,12 @@
             </div>
             <span class="progress-value">{{ project.progress }}%</span>
           </div>
+          <div class="project-actions">
+            <AppButton variant="icon" icon="fas fa-eye" tooltip="View Details" />
+            <AppButton variant="icon" icon="fas fa-edit" tooltip="Edit Project" />
+            <AppButton variant="icon" icon="fas fa-chart-bar" tooltip="View Reports" />
+            <AppButton variant="icon" icon="fas fa-trash" tooltip="Delete Project" @click.stop="deleteProject(project)" />
+          </div>
         </div>
       </div>
 
@@ -247,12 +253,12 @@ export default {
         project_name: '',
         start_date: '',
         timezone: 'Africa/Addis_Ababa',
-        project_type: 'scheduled',        // scheduled | documented
-        objectives: [],                   // array of strings
+        project_type: 'scheduled',
+        objectives: [],
         objective_input: '',
         team_input: '',
-        expected_duration_value: '',      // numeric value
-        expected_duration_unit: 'hours',  // minutes | hours | days
+        expected_duration_value: '',
+        expected_duration_unit: 'hours',
         total_estimated_cost: '',
         state: 'tentative'
       },
@@ -318,17 +324,6 @@ export default {
       this.createLoading = true
       this.error = null
 
-      let companyName = this.userStore.currentUser?.company_name || this.userStore.companyName
-      if (!companyName) {
-        this.userStore.initializeAuth()
-        companyName = this.userStore.currentUser?.company_name || this.userStore.companyName
-        if (!companyName) {
-          alert('Cannot create project: company name missing. Please log in again.')
-          this.createLoading = false
-          return
-        }
-      }
-
       try {
         // Convert date string
         let startDate = this.newProject.start_date || null
@@ -354,7 +349,6 @@ export default {
           project_name: this.newProject.project_name,
           start_date: startDate,
           timezone: this.newProject.timezone,
-          company_name: companyName,
           project_type: this.newProject.project_type || 'scheduled',
           objectives: this.newProject.objectives || [],
           expected_duration: expectedDuration,
