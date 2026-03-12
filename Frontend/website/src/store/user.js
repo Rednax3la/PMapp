@@ -1,5 +1,3 @@
-//Frontend/website/src/store/user.js
-
 import { defineStore } from 'pinia'
 import { authService } from '@/services/auth'
 
@@ -7,6 +5,7 @@ export const useUserStore = defineStore('user', {
   state: () => ({
     user: null,
     isAuthenticated: false,
+    subscriptionTier: 'free',
     loading: false,
     error: null
   }),
@@ -17,36 +16,31 @@ export const useUserStore = defineStore('user', {
     companyName: (state) => state.user?.company_name || null,
     isAdmin: (state) => state.user?.role === 'admin',
     isManager: (state) => ['admin', 'manager'].includes(state.user?.role),
+    isMember: (state) => state.user?.role === 'member',
+    isFree: (state) => state.subscriptionTier === 'free',
+    isPro: (state) => state.subscriptionTier === 'pro',
+    isEnterprise: (state) => state.subscriptionTier === 'enterprise',
   },
 
   actions: {
-    // Initialize user state from localStorage
     initializeAuth() {
       try {
-        const token = localStorage.getItem('access_token')
         const userData = JSON.parse(localStorage.getItem('user_data') || 'null')
-        
-        if (token && userData) {
-          // Verify user data has required fields
-          if (userData.username && userData.company_name) {
-            this.user = userData
-            this.isAuthenticated = true
-            console.log('Auth initialized with user:', userData) // Debug log
-          } else {
-            console.warn('Incomplete user data, attempting to restore from JWT')
-            // Try to get user data from authService (which will decode JWT)
-            const restoredUser = authService.getCurrentUser()
-            if (restoredUser && restoredUser.company_name) {
-              this.user = restoredUser
-              this.isAuthenticated = true
-              console.log('Auth restored from JWT:', restoredUser) // Debug log
-            } else {
-              console.warn('Failed to restore user data, clearing auth')
-              this.clearAuth()
-            }
-          }
+        const tier = localStorage.getItem('subscription_tier') || 'free'
+
+        if (userData && userData.username && userData.company_name) {
+          this.user = userData
+          this.isAuthenticated = true
+          this.subscriptionTier = tier
         } else {
-          this.clearAuth()
+          const restoredUser = authService.getCurrentUser()
+          if (restoredUser && restoredUser.company_name) {
+            this.user = restoredUser
+            this.isAuthenticated = true
+            this.subscriptionTier = restoredUser.subscription_tier || tier
+          } else {
+            this.clearAuth()
+          }
         }
       } catch (error) {
         console.error('Error initializing auth:', error)
@@ -54,7 +48,6 @@ export const useUserStore = defineStore('user', {
       }
     },
 
-    // Login action
     async login(username, password) {
       this.loading = true
       this.error = null
@@ -62,15 +55,15 @@ export const useUserStore = defineStore('user', {
       try {
         const response = await authService.login(username, password)
 
-        // Update store state with validated user data
         this.user = {
           username: response.username || username,
           company_name: response.company_name,
           role: response.role
         }
         this.isAuthenticated = true
+        this.subscriptionTier = response.subscription_tier || 'free'
 
-        console.log('User store updated with:', this.user) // Debug log
+        localStorage.setItem('subscription_tier', this.subscriptionTier)
 
         return response
       } catch (error) {
@@ -82,22 +75,20 @@ export const useUserStore = defineStore('user', {
       }
     },
 
-    // Logout action
-    logout() {
-      authService.logout()
+    async logout() {
+      await authService.logout()
       this.clearAuth()
-      localStorage.removeItem('access_token')
       localStorage.removeItem('user_data')
+      localStorage.removeItem('subscription_tier')
     },
 
-    // Clear authentication state
     clearAuth() {
       this.user = null
       this.isAuthenticated = false
+      this.subscriptionTier = 'free'
       this.error = null
     },
 
-    // Update user data
     updateUser(userData) {
       if (this.user) {
         this.user = { ...this.user, ...userData }
@@ -105,10 +96,20 @@ export const useUserStore = defineStore('user', {
       }
     },
 
-    // Clear error
+    async refreshSubscription() {
+      try {
+        const { subscriptionService } = await import('@/services/subscription')
+        const data = await subscriptionService.getSubscription()
+        this.subscriptionTier = data.tier || 'free'
+        localStorage.setItem('subscription_tier', this.subscriptionTier)
+        return data
+      } catch (e) {
+        console.warn('Could not refresh subscription:', e)
+      }
+    },
+
     clearError() {
       this.error = null
     }
   }
 })
-

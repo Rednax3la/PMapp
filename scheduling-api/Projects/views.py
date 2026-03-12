@@ -43,7 +43,7 @@ def view_projects():
         if isinstance(start_date_val, datetime):
             # Ensure timezone awareness
             if start_date_val.tzinfo is None:
-                timezone_str = proj.get('timezone', 'Africa/Addis_Ababa')
+                timezone_str = proj.get('timezone', 'Africa/Nairobi')
                 tz = pytz.timezone(timezone_str)
                 start_date_val = tz.localize(start_date_val)
             start_date_iso = start_date_val.isoformat()
@@ -74,7 +74,7 @@ def view_projects():
             "total_estimated_cost": total_cost,
             "state": project_state,  # FIXED: Use calculated state
             "team": proj.get('team', []),
-            "timezone": proj.get('timezone', 'Africa/Addis_Ababa'),  # FIXED: Include timezone
+            "timezone": proj.get('timezone', 'Africa/Nairobi'),  # FIXED: Include timezone
             "task_count": len(tasks),  # FIXED: Add task count
             "completed_tasks": len([t for t in tasks if get_task_state(t['id']) == 'complete']),  # FIXED: Add completed task count
             "tasks": []
@@ -88,7 +88,7 @@ def view_projects():
             st_val = t.get('start_time')
             if isinstance(st_val, datetime):
                 if st_val.tzinfo is None:
-                    timezone_str = proj.get('timezone', 'Africa/Addis_Ababa')
+                    timezone_str = proj.get('timezone', 'Africa/Nairobi')
                     tz = pytz.timezone(timezone_str)
                     st_val = tz.localize(st_val)
                 st_iso = st_val.isoformat()

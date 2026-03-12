@@ -233,11 +233,14 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue';
-import { format, addDays, differenceInDays, startOfDay, isToday as checkIsToday, differenceInCalendarDays } from 'date-fns';
+import { format, addDays, differenceInDays, startOfDay, isToday as checkIsToday, differenceInCalendarDays, parseISO } from 'date-fns';
 import Sidebar from '@/components/layout/Sidebar.vue';
 import AppHeader from '@/components/layout/AppHeader.vue';
 import ThemeToggle from '@/components/layout/ThemeToggle.vue';
 import AppButton from '@/components/ui/AppButton.vue';
+import { visualizationService } from '@/services/visualizations';
+import api from '@/services/api';
+import { useUserStore } from '@/store/user';
 
 export default {
   name: 'GanttPage',
@@ -275,83 +278,11 @@ export default {
     const tooltipTask = ref(null);
     const tooltipStyle = ref({});
 
-    // Sample Projects
-    const projects = ref([
-      { id: 1, name: 'Website Redesign' },
-      { id: 2, name: 'Mobile App Development' },
-      { id: 3, name: 'Marketing Campaign' },
-      { id: 4, name: 'Backend Infrastructure' }
-    ]);
+    // Projects — loaded from API
+    const projects = ref([]);
 
-    // Task Data
-    const ganttTasks = ref([
-      {
-        id: 1,
-        name: 'Project Planning & Research',
-        project: 'Website Redesign',
-        assignee: 'Sarah Johnson',
-        startDate: new Date(2024, 0, 15),
-        endDate: new Date(2024, 1, 5),
-        progress: 100,
-        status: 'Completed',
-        dependencies: []
-      },
-      {
-        id: 2,
-        name: 'UI/UX Design Phase',
-        project: 'Website Redesign',
-        assignee: 'Emma Rodriguez',
-        startDate: new Date(2024, 1, 1),
-        endDate: new Date(2024, 2, 15),
-        progress: 75,
-        status: 'In Progress',
-        dependencies: [1]
-      },
-      {
-        id: 3,
-        name: 'Frontend Development',
-        project: 'Website Redesign',
-        assignee: 'David Kim',
-        startDate: new Date(2024, 2, 10),
-        endDate: new Date(2024, 4, 20),
-        progress: 30,
-        status: 'In Progress',
-        dependencies: [2]
-      },
-      {
-        id: 4,
-        name: 'Backend API Development',
-        project: 'Website Redesign',
-        assignee: 'Michael Chen',
-        startDate: new Date(2024, 1, 20),
-        endDate: new Date(2024, 4, 15),
-        progress: 45,
-        status: 'In Progress',
-        dependencies: [1]
-      },
-      {
-        id: 5,
-        name: 'Testing & QA',
-        project: 'Website Redesign',
-        assignee: 'Priya Patel',
-        startDate: new Date(2024, 4, 10),
-        endDate: new Date(2024, 5, 10),
-        progress: 0,
-        status: 'Not Started',
-        dependencies: [3, 4]
-      },
-      {
-        id: 6,
-        name: 'Content Migration',
-        project: 'Website Redesign',
-        assignee: 'Sarah Johnson',
-        startDate: new Date(2024, 3, 1),
-        endDate: new Date(2024, 4, 30),
-        progress: 15,
-        status: 'Delayed',
-        dependencies: [2]
-      }
-    ]);
+    // Task Data — populated from API
+    const ganttTasks = ref([]);
 
     // Timeline Generation
     const timelineHeaders = computed(() => {
@@ -461,28 +392,70 @@ export default {
       };
     };
 
-    // Event Handlers
+    // Load projects list on mount
+    const loadProjects = async () => {
+      try {
+        const res = await api.post('/projects/view');
+        projects.value = (res.data.projects || []).map(p => ({ id: p.id, name: p.name }));
+        if (projects.value.length > 0 && !selectedProject.value) {
+          selectedProject.value = projects.value[0].name;
+          await loadGanttData();
+        }
+      } catch (e) {
+        console.error('Failed to load projects:', e);
+      }
+    };
+
+    // Load Gantt data from real API
     const loadGanttData = async () => {
       if (!selectedProject.value) return;
-      
       loading.value = true;
       error.value = null;
-      
+
       try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        // Filter tasks by selected project
-        const filteredTasks = ganttTasks.value.filter(task => 
-          task.project === selectedProject.value
+        const userStore = useUserStore();
+        const data = await visualizationService.getGanttChart(
+          userStore.companyName,
+          selectedProject.value
         );
-        
-        if (filteredTasks.length === 0) {
-          error.value = 'No tasks found for the selected project.';
+
+        const apiTasks = data.tasks || [];
+        if (apiTasks.length === 0) {
+          error.value = 'No tasks found for this project.';
+          ganttTasks.value = [];
+          return;
         }
-        
+
+        // Map API response to the shape Gantt chart expects
+        ganttTasks.value = apiTasks.map(t => {
+          const start = t.start ? new Date(t.start) : new Date();
+          const end = t.end ? new Date(t.end) : addDays(start, 1);
+          return {
+            id: t.id,
+            name: t.task,
+            project: selectedProject.value,
+            assignee: (t.members_display || t.members || []).join(', ') || '—',
+            startDate: start,
+            endDate: end,
+            progress: t.progress || 0,
+            status: t.state || 'tentative',
+            dependencies: t.dependencies || [],
+            priority: t.priority || 'medium',
+            estimatedCost: t.estimated_cost || 0,
+          };
+        });
+
+        // Auto-fit date range to project tasks
+        if (ganttTasks.value.length) {
+          const earliest = ganttTasks.value.reduce((m, t) => t.startDate < m ? t.startDate : m, ganttTasks.value[0].startDate);
+          const latest   = ganttTasks.value.reduce((m, t) => t.endDate   > m ? t.endDate   : m, ganttTasks.value[0].endDate);
+          startDate.value = format(earliest, 'yyyy-MM-dd');
+          endDate.value   = format(addDays(latest, 7), 'yyyy-MM-dd');
+        }
+
       } catch (err) {
-        error.value = 'Failed to load Gantt chart data. Please try again.';
+        error.value = 'Failed to load Gantt data. Please try again.';
+        console.error('Gantt load error:', err);
       } finally {
         loading.value = false;
       }
@@ -521,17 +494,10 @@ export default {
       tooltipTask.value = null;
     };
 
-    onMounted(() => {
+    onMounted(async () => {
       const savedTheme = localStorage.getItem("zainpm-theme");
-      if (savedTheme === "light") {
-        isDark.value = false;
-      }
-      
-      // Auto-select first project
-      if (projects.value.length > 0) {
-        selectedProject.value = projects.value[0].name;
-        loadGanttData();
-      }
+      if (savedTheme === "light") isDark.value = false;
+      await loadProjects();
     });
 
     return {
@@ -562,6 +528,7 @@ export default {
       getTaskStatusClass,
       getProjectColor,
       getTodayLineStyle,
+      loadProjects,
       loadGanttData,
       updateDateRange,
       resetToCurrentMonth,

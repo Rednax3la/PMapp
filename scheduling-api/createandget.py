@@ -18,7 +18,7 @@ def _now():
 # ------------------------
 # Project functions
 # ------------------------
-def create_project(name: str, start_date: datetime, company_name: str, timezone: str = "Africa/Addis_Ababa",
+def create_project(name: str, start_date: datetime, company_name: str, timezone: str = "Africa/Nairobi",
                    project_type: str = "scheduled", objectives: list = None):
     """
     FIXED: Create a project document in projects_col with proper field handling.
@@ -118,7 +118,7 @@ def create_task(project_id: str, name: str, start_time: datetime = None, expecte
         raise ValueError("expected_duration must be positive")
 
     # Convert start_time to timezone-aware
-    project_timezone = project.get('timezone', 'Africa/Addis_Ababa')
+    project_timezone = project.get('timezone', 'Africa/Nairobi')
     tz = pytz.timezone(project_timezone)
     
     if start_time and start_time.tzinfo is None:

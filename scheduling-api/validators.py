@@ -7,7 +7,7 @@ class ProjectCreate(BaseModel):
     project_name: str
     start_date: Optional[datetime] = None
     company_name: str
-    timezone: Optional[str] = "Africa/Addis_Ababa"
+    timezone: Optional[str] = "Africa/Nairobi"
     objectives: Optional[List[str]] = []
     project_type: Optional[str] = Field(
         default="scheduled",

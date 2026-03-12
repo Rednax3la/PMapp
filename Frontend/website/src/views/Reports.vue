@@ -9,8 +9,8 @@
       <AppHeader title="Reports">
         <template #actions>
           <ThemeToggle :is-dark="isDark" @toggle="toggleTheme" />
-          <AppButton variant="primary" icon="fas fa-download">
-            Export Reports
+          <AppButton variant="primary" icon="fas fa-download" @click="exportCsv">
+            Export CSV
           </AppButton>
         </template>
       </AppHeader>
@@ -220,60 +220,45 @@
 import Sidebar from '@/components/layout/Sidebar.vue'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import ThemeToggle from '@/components/layout/ThemeToggle.vue'
-import { projectService } from '@/services/projects'
-import { authService } from '@/services/auth'
+import AppButton from '@/components/ui/AppButton.vue'
+import { reportsService } from '@/services/reports'
 
 export default {
   name: 'ReportsPage',
-  components: { Sidebar, AppHeader, ThemeToggle },
+  components: { Sidebar, AppHeader, ThemeToggle, AppButton },
 
   data() {
     return {
-      // Theme
-      isDark: true,
-
-      // Data
+      isDark: localStorage.getItem('zainpm-theme') !== 'light',
+      summary: null,
       reports: [],
       projects: [],
-
-      // State
       loading: false,
       error: null,
-
-      // Filters
       selectedProject: '',
-      filters: {
-        dateRange: null,
-        status: 'all'
-      }
+      filters: { dateRange: null, status: 'all' }
     }
   },
 
   computed: {
+    keyMetrics() {
+      if (!this.summary) return []
+      return [
+        { label: 'Total Projects', value: this.summary.total_projects, icon: 'fas fa-project-diagram', change: '', changeClass: '', changeIcon: '' },
+        { label: 'Completion Rate', value: `${this.summary.completion_rate}%`, icon: 'fas fa-chart-line', change: '', changeClass: '', changeIcon: '' },
+        { label: 'Active Tasks', value: this.summary.in_progress_tasks, icon: 'fas fa-tasks', change: '', changeClass: '', changeIcon: '' },
+        { label: 'Team Members', value: this.summary.team_members, icon: 'fas fa-users', change: '', changeClass: '', changeIcon: '' },
+      ]
+    },
+
     filteredReports() {
       let results = this.reports.slice()
-
-      // filter by project
       if (this.selectedProject) {
         results = results.filter(r => r.project === this.selectedProject)
       }
-
-      // filter by status
       if (this.filters.status !== 'all') {
         results = results.filter(r => r.status === this.filters.status)
       }
-
-      // filter by date range
-      if (this.filters.dateRange && this.filters.dateRange.length === 2) {
-        const [start, end] = this.filters.dateRange
-        const startDate = new Date(start)
-        const endDate = new Date(end)
-        results = results.filter(r => {
-          const d = new Date(r.date)
-          return d >= startDate && d <= endDate
-        })
-      }
-
       return results
     }
   },
@@ -284,45 +269,53 @@ export default {
       localStorage.setItem('zainpm-theme', this.isDark ? 'dark' : 'light')
     },
 
-    async fetchProjects() {
-      try {
-        const user = authService.getCurrentUser()
-        if (!user?.company_name) throw new Error('Missing company information')
-        this.projects = await projectService.getProjects(user.company_name)
-      } catch (err) {
-        this.error = err.message || 'Failed to fetch projects'
-      }
-    },
-
-    async fetchReports() {
+    async fetchSummary() {
       this.loading = true
       this.error = null
       try {
-        const user = authService.getCurrentUser()
-        if (!user?.company_name) throw new Error('Missing company information')
-        // latest updates serve as reports
-        this.reports = await projectService.getLatestUpdates(user.company_name)
+        this.summary = await reportsService.getSummary()
       } catch (err) {
-        this.error = err.message || 'Failed to fetch reports'
+        this.error = err.response?.data?.error || 'Failed to load report data'
       } finally {
         this.loading = false
       }
     },
 
-    applyFilters() {
-      // no-op: computed handles it
+    async exportCsv() {
+      try {
+        await reportsService.exportCsv(this.selectedProject)
+      } catch (err) {
+        this.error = 'Export failed'
+      }
     },
+
+    applyFilters() {},
 
     formatDate(d) {
       return d ? new Date(d).toLocaleDateString() : 'N/A'
-    }
+    },
+
+    getProgressColor(p) {
+      if (p >= 80) return 'var(--success)'
+      if (p >= 50) return 'var(--primary)'
+      return 'var(--warning)'
+    },
+
+    getEfficiencyClass(e) {
+      if (e >= 90) return 'high'
+      if (e >= 70) return 'medium'
+      return 'low'
+    },
+
+    formatNumber(n) {
+      return n ? n.toLocaleString() : '0'
+    },
+
+    sortBy() {}
   },
 
   mounted() {
-    const saved = localStorage.getItem('zainpm-theme')
-    this.isDark = saved ? saved === 'dark' : this.isDark
-    this.fetchProjects()
-    this.fetchReports()
+    this.fetchSummary()
   }
 }
 </script>

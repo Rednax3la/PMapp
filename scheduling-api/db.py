@@ -31,50 +31,40 @@ def create_mongo_client():
     mongo_uri = get_mongo_uri()
     
     try:
-        print("🔄 Connecting to MongoDB Atlas...")
-        print(f"📍 Cluster: {MONGO_CLUSTER}")
-        print(f"🗄️  Database: {MONGO_DATABASE}")
-        
+        print("[DB] Connecting to MongoDB Atlas...")
+        print(f"[DB] Cluster: {MONGO_CLUSTER}")
+        print(f"[DB] Database: {MONGO_DATABASE}")
+
         client = MongoClient(
             mongo_uri,
-            serverSelectionTimeoutMS=10000,  # 10 seconds
-            connectTimeoutMS=20000,          # 20 seconds  
-            socketTimeoutMS=30000,           # 30 seconds
+            serverSelectionTimeoutMS=10000,
+            connectTimeoutMS=20000,
+            socketTimeoutMS=30000,
             retryWrites=True,
             w='majority'
         )
-        
-        # Test the connection
-        print("🧪 Testing connection...")
+
+        print("[DB] Testing connection...")
         client.admin.command('ping')
-        
-        # Get server info
+
         server_info = client.server_info()
-        print(f"✅ Successfully connected to MongoDB Atlas!")
-        print(f"📊 MongoDB Version: {server_info.get('version', 'Unknown')}")
-        
+        print(f"[DB] Connected! MongoDB v{server_info.get('version', 'Unknown')}")
+
         return client
-        
+
     except ServerSelectionTimeoutError as e:
-        print(f"❌ MongoDB Atlas Connection Timeout: {e}")
-        print("💡 Troubleshooting tips:")
-        print("   1. Check your internet connection")
-        print("   2. Verify your MongoDB Atlas cluster is running")
-        print("   3. Check if your IP address is whitelisted in Atlas")
-        print("   4. Verify username and password are correct")
+        print(f"[DB] Connection Timeout: {e}")
+        print("[DB] Check: internet connection, Atlas cluster status, IP whitelist, credentials")
         sys.exit(1)
-        
+
     except ConnectionFailure as e:
-        print(f"❌ MongoDB Atlas Connection Failed: {e}")
-        print("💡 Possible issues:")
-        print("   1. Invalid credentials")
-        print("   2. Cluster not accessible")
-        print("   3. Network firewall blocking connection")
+        print(f"[DB] Connection Failed: {e}")
+        print("[DB] Check: credentials, cluster accessibility, firewall rules")
         sys.exit(1)
-        
+
     except Exception as e:
-        print(f"❌ Unexpected MongoDB Atlas error: {e}")
-        print(f"🔗 Connection URI (credentials hidden): mongodb+srv://***:***@{MONGO_CLUSTER}/{MONGO_DATABASE}")
+        print(f"[DB] Unexpected error: {e}")
+        print(f"[DB] URI (hidden): mongodb+srv://***:***@{MONGO_CLUSTER}/{MONGO_DATABASE}")
         sys.exit(1)
 
 # Initialize MongoDB Atlas client
@@ -88,40 +78,52 @@ tasks_col = db['tasks']
 updates_col = db['updates']
 project_updates_col = db['project_updates']
 teams_col = db['teams']
+subscriptions_col = db['subscriptions']
+stripe_events_col = db['stripe_events']
 
 # Create indexes for better performance
 def create_indexes():
     """Create database indexes for optimal performance"""
     try:
-        print("🔧 Creating database indexes...")
-        
+        print("[DB] Creating database indexes...")
+
         # Users collection indexes
         users_col.create_index("username", unique=True)
         users_col.create_index("company_name")
-        
+
         # Projects collection indexes
         projects_col.create_index([("company_name", 1), ("name", 1)], unique=True)
         projects_col.create_index("company_name")
         projects_col.create_index("start_date")
-        
+
         # Tasks collection indexes
         tasks_col.create_index([("project_id", 1), ("name", 1)], unique=True)
         tasks_col.create_index("project_id")
         tasks_col.create_index("start_time")
         tasks_col.create_index("members")
-        
+
         # Updates collection indexes
         updates_col.create_index("task_id")
         updates_col.create_index("timestamp")
-        
+
         # Project updates collection indexes
         project_updates_col.create_index("project_id")
         project_updates_col.create_index("timestamp")
-        
-        print("✅ Database indexes created successfully!")
-        
+
+        # Teams collection indexes
+        teams_col.create_index([("company_name", 1), ("name", 1)], unique=True)
+
+        # Subscriptions collection indexes
+        subscriptions_col.create_index("company_name", unique=True)
+        subscriptions_col.create_index("stripe_customer_id")
+
+        # Stripe events collection indexes
+        stripe_events_col.create_index("stripe_event_id", unique=True)
+
+        print("[DB] Indexes created successfully.")
+
     except Exception as e:
-        print(f"⚠️  Warning: Could not create indexes: {e}")
+        print(f"[DB] Warning: Could not create indexes: {e}")
 
 def ping():
     """Test database connection"""
@@ -170,48 +172,42 @@ def get_db_stats():
 def check_atlas_connection():
     """Comprehensive Atlas connection check"""
     print("\n" + "="*50)
-    print("🔍 MONGODB ATLAS CONNECTION CHECK")
+    print("[DB] MONGODB ATLAS CONNECTION CHECK")
     print("="*50)
-    
-    # 1. Test ping
+
     ping_result = ping()
     if ping_result["status"] == "success":
-        print("✅ Connection: OK")
+        print("[DB] Connection: OK")
     else:
-        print(f"❌ Connection: FAILED - {ping_result['message']}")
+        print(f"[DB] Connection: FAILED - {ping_result['message']}")
         return False
-    
-    # 2. Test database operations
+
     try:
-        # Try to insert a test document
         test_collection = db['connection_test']
         test_doc = {"test": True, "timestamp": "2024-01-01"}
         result = test_collection.insert_one(test_doc)
-        print(f"✅ Write Test: OK (ID: {result.inserted_id})")
-        
-        # Try to read the document
+        print(f"[DB] Write Test: OK (ID: {result.inserted_id})")
+
         found_doc = test_collection.find_one({"_id": result.inserted_id})
         if found_doc:
-            print("✅ Read Test: OK")
-        
-        # Clean up test document
+            print("[DB] Read Test: OK")
+
         test_collection.delete_one({"_id": result.inserted_id})
-        print("✅ Delete Test: OK")
-        
+        print("[DB] Delete Test: OK")
+
     except Exception as e:
-        print(f"❌ Database Operations: FAILED - {e}")
+        print(f"[DB] Database Operations: FAILED - {e}")
         return False
-    
-    # 3. Show database stats
+
     stats = get_db_stats()
     if "error" not in stats:
-        print(f"📊 Database: {stats['database']}")
-        print(f"📦 Collections: {stats['total_collections']}")
-        print(f"📄 Documents: {stats['total_objects']}")
-        print(f"💾 Data Size: {stats['dataSize']}")
-    
+        print(f"[DB] Database: {stats['database']}")
+        print(f"[DB] Collections: {stats['total_collections']}")
+        print(f"[DB] Documents: {stats['total_objects']}")
+        print(f"[DB] Data Size: {stats['dataSize']}")
+
     print("="*50)
-    print("🎉 MongoDB Atlas is ready for ZainPM!")
+    print("[DB] MongoDB Atlas is ready for ZainPM!")
     print("="*50 + "\n")
     return True
 
@@ -224,10 +220,12 @@ else:
     try:
         create_indexes()
     except Exception as e:
-        print(f"⚠️  Could not create indexes on import: {e}")
+        print(f"[DB] Warning: Could not create indexes on import: {e}")
 
 # Export collections for easy importing
 __all__ = [
-    'client', 'db', 'users_col', 'projects_col', 'tasks_col', 
-    'updates_col', 'project_updates_col', 'ping', 'get_db_stats'
+    'client', 'db', 'users_col', 'projects_col', 'tasks_col',
+    'updates_col', 'teams_col', 'project_updates_col',
+    'subscriptions_col', 'stripe_events_col',
+    'ping', 'get_db_stats'
 ]

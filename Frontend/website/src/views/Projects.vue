@@ -1,6 +1,11 @@
 //Frontend/website/src/views/Projects.vue
 <template>
   <div class="projects-page" :class="{ dark: isDark, light: !isDark }">
+    <SubscriptionBanner
+      :show="showSubscriptionBanner"
+      message="You've reached the project limit on your current plan."
+      @close="showSubscriptionBanner = false"
+    />
     <!-- Sidebar -->
     <Sidebar />
     
@@ -54,7 +59,7 @@
         <div 
           v-for="project in filteredProjects" 
           :key="project.id" 
-          class="project-card" 
+          class="project-card glass-card"
           @click="selectProject(project)"
         >
           <div class="project-header">
@@ -121,7 +126,7 @@
               <div class="form-group" style="width:220px;">
                 <label>Timezone</label>
                 <select v-model="newProject.timezone">
-                  <option value="Africa/Addis_Ababa">Africa/Addis_Ababa</option>
+                  <option value="Africa/Nairobi">Africa/Nairobi</option>
                   <option value="UTC">UTC</option>
                   <option value="America/New_York">America/New_York</option>
                   <option value="Europe/London">Europe/London</option>
@@ -179,12 +184,6 @@
                 <input v-model="newProject.total_estimated_cost" type="number" min="0" step="0.01" placeholder="0.00" />
               </div>
             </div>
-
-            <div class="form-group">
-              <label>Team Members (comma-separated emails)</label>
-              <input v-model="newProject.team_input" type="text" placeholder="alice@example.com, bob@example.com" />
-            </div>
-
             <div class="modal-actions">
               <AppButton type="button" @click="showCreateModal = false">Cancel</AppButton>
               <AppButton type="submit" :disabled="createLoading" variant="primary">
@@ -212,6 +211,7 @@ import ThemeToggle from '@/components/layout/ThemeToggle.vue'
 import StateBadge from '@/components/ui/StateBadge.vue'
 import AppButton from '@/components/ui/AppButton.vue'
 import ProjectModal from '@/components/projects/ProjectModal.vue'
+import SubscriptionBanner from '@/components/ui/SubscriptionBanner.vue'
 import { projectService } from '@/services/projects'
 import { useUserStore } from '@/store/user'
 import { authService } from '@/services/auth'
@@ -225,6 +225,7 @@ export default {
     StateBadge,
     AppButton,
     ProjectModal,
+    SubscriptionBanner,
   },
 
   data() {
@@ -237,6 +238,7 @@ export default {
       loading: false,
       error: null,
       showCreateModal: false,
+      showSubscriptionBanner: false,
       createLoading: false,
       selectedProject: null,
 
@@ -252,11 +254,10 @@ export default {
       newProject: {
         project_name: '',
         start_date: '',
-        timezone: 'Africa/Addis_Ababa',
+        timezone: 'Africa/Nairobi',
         project_type: 'scheduled',
         objectives: [],
         objective_input: '',
-        team_input: '',
         expected_duration_value: '',
         expected_duration_unit: 'hours',
         total_estimated_cost: '',
@@ -339,12 +340,6 @@ export default {
           else if (unit === 'days') expectedDuration = Math.round(v * 60 * 24)
         }
 
-        // Normalize team input
-        const teamArr = (this.newProject.team_input || '')
-          .split(',')
-          .map(s => s.trim())
-          .filter(Boolean)
-
         const payload = {
           project_name: this.newProject.project_name,
           start_date: startDate,
@@ -353,7 +348,6 @@ export default {
           objectives: this.newProject.objectives || [],
           expected_duration: expectedDuration,
           total_estimated_cost: this.newProject.total_estimated_cost ? Number(this.newProject.total_estimated_cost) : undefined,
-          team: teamArr,
           state: this.newProject.state
         }
 
@@ -366,11 +360,10 @@ export default {
         this.newProject = {
           project_name: '',
           start_date: '',
-          timezone: 'Africa/Addis_Ababa',
+          timezone: 'Africa/Nairobi',
           project_type: 'scheduled',
           objectives: [],
           objective_input: '',
-          team_input: '',
           expected_duration_value: '',
           expected_duration_unit: 'hours',
           total_estimated_cost: '',
@@ -378,9 +371,13 @@ export default {
         }
         await this.loadProjects()
       } catch (e) {
-        const errorMessage = e.message || e.toString() || 'Unknown error occurred'
-        alert('Failed to create project: ' + errorMessage)
-        this.error = errorMessage
+        if (e.response?.status === 402) {
+          this.showSubscriptionBanner = true
+        } else {
+          const errorMessage = e.response?.data?.error || e.message || 'Unknown error occurred'
+          alert('Failed to create project: ' + errorMessage)
+          this.error = errorMessage
+        }
       } finally {
         this.createLoading = false
       }

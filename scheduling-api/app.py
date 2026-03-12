@@ -12,20 +12,34 @@ from createandget import create_project, create_project_update, create_task, cre
 from helpers import format_duration, parse_duration, save_uploaded_file
 from views import generate_timetable, generate_gantt_chart
 from Projects.views import projects_bp
+from Stripe.views import stripe_bp
+from Reports.views import reports_bp
+from Mpesa.views import mpesa_bp
+from subscription_helpers import get_subscription, create_free_subscription
 from flask_jwt_extended import (
     JWTManager, create_access_token, get_jwt, jwt_required, get_jwt_identity, set_access_cookies, unset_jwt_cookies, verify_jwt_in_request
 )
 from dotenv import load_dotenv
 
+# Load environment variables before any config reads
+load_dotenv()
+
 app = Flask(__name__)
-CORS(app, origins=['http://localhost:8080'], supports_credentials=True)
+
+# CORS: support both local dev and production frontend
+_frontend_origins = [o.strip() for o in os.getenv("FRONTEND_URL", "http://localhost:8080").split(",") if o.strip()]
+if "http://localhost:8080" not in _frontend_origins:
+    _frontend_origins.append("http://localhost:8080")
+CORS(app, origins=_frontend_origins, supports_credentials=True)
+
 app.register_blueprint(projects_bp)
+app.register_blueprint(stripe_bp)
+app.register_blueprint(reports_bp)
+app.register_blueprint(mpesa_bp)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# Load environment variables
-load_dotenv()
 jwt_secret = os.getenv("JWT_SECRET_KEY")
 if not jwt_secret:
     raise RuntimeError("JWT_SECRET_KEY environment variable is required. Set a strong secret in your environment.")
@@ -129,6 +143,8 @@ def register():
 
     try:
         user = create_user(username, data['password'], data['company_name'])
+        # Initialise a free-tier subscription for the new company
+        create_free_subscription(data['company_name'])
         serialized = {
             "id": str(user.get("id") or user.get("_id") or user.get("username")),
             "username": user.get("username"),
@@ -139,7 +155,6 @@ def register():
             "user": serialized
         }), 201
     except ValueError as e:
-        # Expected validation errors from create_user (e.g. duplicate email)
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         return jsonify({"error": "Server error: " + str(e)}), 500
@@ -156,21 +171,27 @@ def login():
     if not user_doc or not check_password(data['password'], user_doc.get('password', '')):
         return jsonify({"error": "Invalid credentials"}), 401
 
-    # Create access token with longer expiration for testing
+    # Fetch subscription tier for this company
+    company_name = user_doc.get("company_name")
+    sub = get_subscription(company_name)
+    subscription_tier = sub.get("tier", "free")
+
     access_token = create_access_token(
         identity=str(user_doc.get("id") or user_doc.get("_id") or user_doc.get("username")),
         additional_claims={
-            "company_name": user_doc.get("company_name"),
-            "role": user_doc.get("role")
+            "company_name": company_name,
+            "role": user_doc.get("role"),
+            "subscription_tier": subscription_tier,
         },
-        expires_delta=timedelta(hours=24)  # Temporary: longer expiration for testing
+        expires_delta=timedelta(hours=24)
     )
 
     resp = jsonify({
         "message": "Login successful",
         "username": user_doc.get("username"),
-        "company_name": user_doc.get("company_name"),
-        "role": user_doc.get("role")
+        "company_name": company_name,
+        "role": user_doc.get("role"),
+        "subscription_tier": subscription_tier,
     })
     
     # Set cookies with proper configuration
@@ -382,13 +403,13 @@ def create_project_endpoint():
                         # Parse date string (YYYY-MM-DD)
                         parsed_date = datetime.strptime(date_str, '%Y-%m-%d')
                         # Make it timezone-aware using project timezone
-                        timezone_str = data.get('timezone', 'Africa/Addis_Ababa')
+                        timezone_str = data.get('timezone', 'Africa/Nairobi')
                         tz = pytz.timezone(timezone_str)
                         parsed_date = tz.localize(parsed_date)
                     
                     # Ensure it's in the correct timezone
                     if parsed_date.tzinfo is None:
-                        timezone_str = data.get('timezone', 'Africa/Addis_Ababa')
+                        timezone_str = data.get('timezone', 'Africa/Nairobi')
                         tz = pytz.timezone(timezone_str)
                         parsed_date = tz.localize(parsed_date)
                         
@@ -408,7 +429,7 @@ def create_project_endpoint():
         
         # Handle start_date
         if not project_data.start_date:
-            timezone_str = project_data.timezone or 'Africa/Addis_Ababa'
+            timezone_str = project_data.timezone or 'Africa/Nairobi'
             tz = pytz.timezone(timezone_str)
             project_data.start_date = datetime.now(tz)
             print(f"Set default start_date: {project_data.start_date}")
@@ -426,6 +447,18 @@ def create_project_endpoint():
                     "error": "Scheduled projects cannot start in the past – "
                              "either set start_date ≥ now or use project_type='documented'"
                 }), 400
+
+        # Check subscription project limit before creating
+        from subscription_helpers import check_project_limit, LimitExceededError
+        try:
+            check_project_limit(company)
+        except LimitExceededError as le:
+            return jsonify({
+                "error": "limit_exceeded",
+                "message": f"You've reached the {le.tier} plan limit of {le.limit} projects. Upgrade to create more.",
+                "upgrade_required": True,
+                "tier": le.tier
+            }), 402
 
         print("About to call create_project function")
         project = create_project(
@@ -587,6 +620,18 @@ def tasks_endpoint():
         project = get_project_by_name(task_data.project_name)
         if not project:
             return jsonify({"error": f"Project '{task_data.project_name}' not found"}), 404
+
+        # Check subscription task limit
+        from subscription_helpers import check_task_limit, LimitExceededError
+        try:
+            check_task_limit(project['id'])
+        except LimitExceededError as le:
+            return jsonify({
+                "error": "limit_exceeded",
+                "message": f"You've reached the {le.tier} plan limit of {le.limit} tasks per project. Upgrade to add more.",
+                "upgrade_required": True,
+                "tier": le.tier
+            }), 402
 
         # 2) Determine start_time param for create_task:
         #    - If provided, ensure it's timezone‐aware

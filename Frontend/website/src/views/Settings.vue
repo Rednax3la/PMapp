@@ -469,6 +469,7 @@ import Sidebar from '@/components/layout/Sidebar.vue';
 import AppHeader from '@/components/layout/AppHeader.vue';
 import ThemeToggle from '@/components/layout/ThemeToggle.vue';
 import AppButton from '@/components/ui/AppButton.vue';
+import { profileService } from '@/services/profile';
 
 export default {
   name: 'SettingsPage',
@@ -586,10 +587,16 @@ export default {
       console.log('Opening support contact form...');
     };
 
-    const saveSettings = () => {
-      console.log('Saving settings...', settings.value);
-      // Save to localStorage or API
-      localStorage.setItem('zainpm-settings', JSON.stringify(settings.value));
+    const saveSettings = async () => {
+      try {
+        await profileService.updateProfile({
+          job_title: settings.value.profile.jobTitle,
+        });
+        localStorage.setItem('zainpm-settings', JSON.stringify(settings.value));
+        alert('Settings saved successfully');
+      } catch (e) {
+        alert('Failed to save settings: ' + (e.response?.data?.error || e.message));
+      }
     };
 
     const resetSettings = () => {
@@ -607,19 +614,30 @@ export default {
       return 'Unknown Browser';
     };
 
-    onMounted(() => {
+    onMounted(async () => {
       const savedTheme = localStorage.getItem("zainpm-theme");
-      if (savedTheme === "light") {
-        isDark.value = false;
-      }
+      if (savedTheme === "light") isDark.value = false;
 
-      // Load saved settings
+      // Load saved local preferences
       const savedSettings = localStorage.getItem('zainpm-settings');
       if (savedSettings) {
         settings.value = { ...settings.value, ...JSON.parse(savedSettings) };
       }
 
       browserInfo.value = getBrowserInfo();
+
+      // Fetch live profile from backend
+      try {
+        const profile = await profileService.getProfile();
+        settings.value.profile = {
+          name: profile.username,
+          email: profile.username,
+          jobTitle: profile.job_title || settings.value.profile.jobTitle,
+          company: profile.company_name
+        };
+      } catch (e) {
+        console.warn('Could not load profile:', e);
+      }
     });
 
     return {

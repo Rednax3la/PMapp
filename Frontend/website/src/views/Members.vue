@@ -281,6 +281,8 @@ import Sidebar from '@/components/layout/Sidebar.vue';
 import AppHeader from '@/components/layout/AppHeader.vue';
 import ThemeToggle from '@/components/layout/ThemeToggle.vue';
 import AppButton from '@/components/ui/AppButton.vue';
+import api from '@/services/api';
+import { membersService } from '@/services/members';
 
 export default {
   name: 'MembersPage',
@@ -292,7 +294,7 @@ export default {
   },
   setup() {
     // Theme Management
-    const isDark = ref(true);
+    const isDark = ref(localStorage.getItem('zainpm-theme') !== 'light');
     const toggleTheme = () => {
       isDark.value = !isDark.value;
       localStorage.setItem("zainpm-theme", isDark.value ? "dark" : "light");
@@ -300,9 +302,7 @@ export default {
 
     // Navigation
     const activeNav = ref('members');
-    const setActiveNav = (target) => {
-      activeNav.value = target;
-    };
+    const setActiveNav = (target) => { activeNav.value = target; };
 
     // State
     const searchQuery = ref('');
@@ -310,8 +310,9 @@ export default {
     const statusFilter = ref('');
     const viewMode = ref('grid');
     const selectedMember = ref(null);
+    const loading = ref(false);
 
-    // Team Members Data
+    // Team Members Data — populated from API
     const teamMembers = ref([
       {
         id: 1,
@@ -501,10 +502,64 @@ export default {
       selectedMember.value = null;
     };
 
-    onMounted(() => {
-      const savedTheme = localStorage.getItem("zainpm-theme");
-      if (savedTheme === "light") {
-        isDark.value = false;
+    onMounted(async () => {
+      loading.value = true;
+      try {
+        // Fetch all projects, then aggregate unique members from each project team
+        const projRes = await api.post('/projects/view');
+        const projects = projRes.data.projects || [];
+
+        const memberMap = new Map();
+
+        for (const proj of projects) {
+          if (!proj.name) continue;
+          try {
+            const teamRes = await membersService.getTeamMembers(proj.name);
+            const members = teamRes.team_members || [];
+            for (const m of members) {
+              const key = m.email;
+              if (!memberMap.has(key)) {
+                memberMap.set(key, {
+                  id: key,
+                  name: m.name || m.email.split('@')[0],
+                  email: m.email,
+                  role: m.role || 'Member',
+                  status: 'Active',
+                  avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(m.name || m.email)}&background=006b80&color=fff&size=150`,
+                  projects: 1,
+                  activeTasks: m.task_count || 0,
+                  totalTasks: m.task_count || 0,
+                  completedTasks: m.completed_tasks || 0,
+                  performance: m.task_count > 0
+                    ? Math.round(((m.completed_tasks || 0) / m.task_count) * 100) : 0,
+                  completionRate: m.task_count > 0
+                    ? Math.round(((m.completed_tasks || 0) / m.task_count) * 100) : 0,
+                  currentProjects: [{ name: proj.name, role: m.role || 'Member' }],
+                  skills: []
+                });
+              } else {
+                const existing = memberMap.get(key);
+                existing.projects += 1;
+                existing.activeTasks += (m.task_count || 0);
+                existing.totalTasks += (m.task_count || 0);
+                existing.completedTasks += (m.completed_tasks || 0);
+                existing.currentProjects.push({ name: proj.name, role: m.role || 'Member' });
+                if (existing.totalTasks > 0) {
+                  existing.performance = Math.round((existing.completedTasks / existing.totalTasks) * 100);
+                  existing.completionRate = existing.performance;
+                }
+              }
+            }
+          } catch (e) {
+            // project may have no team endpoint data, skip
+          }
+        }
+
+        teamMembers.value = Array.from(memberMap.values());
+      } catch (e) {
+        console.error('Failed to load members:', e);
+      } finally {
+        loading.value = false;
       }
     });
 
@@ -526,7 +581,8 @@ export default {
       avgTasksPerMember,
       selectMember,
       editMember,
-      assignTask
+      assignTask,
+      loading
     };
   }
 };

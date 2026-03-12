@@ -12,16 +12,21 @@
 
       <!-- Stats Overview -->
       <div class="stats-grid">
-        <div
-          class="stat-card"
-          v-for="stat in displayStats"
-          :key="stat.label"
-        >
-          <div class="stat-label">{{ stat.label }}</div>
-          <div class="stat-value" :style="{ color: stat.color }">
-            {{ stat.value ?? '0' }}
+        <template v-if="loading">
+          <div v-for="n in 4" :key="n" class="stat-card glass-card skeleton" style="height:90px"></div>
+        </template>
+        <template v-else>
+          <div
+            class="stat-card glass-card fade-in"
+            v-for="stat in displayStats"
+            :key="stat.label"
+          >
+            <div class="stat-label">{{ stat.label }}</div>
+            <div class="stat-value" :style="{ color: stat.color }">
+              {{ stat.value ?? '0' }}
+            </div>
           </div>
-        </div>
+        </template>
       </div>
 
       <!-- State Legend (keeps page-wide legend consistent) -->
@@ -34,7 +39,7 @@
 
       <div class="grid">
         <!-- Active Projects -->
-        <div class="card">
+        <div class="card glass-card">
           <div class="card-header">
             <span>Active Projects</span>
             <router-link to="/projects" class="btn btn-primary btn-sm">View All</router-link>
@@ -65,7 +70,7 @@
         </div>
 
         <!-- Recent Tasks -->
-        <div class="card">
+        <div class="card glass-card">
           <div class="card-header">
             <span>Recent Tasks</span>
             <router-link to="/tasks" class="btn btn-primary btn-sm">View All</router-link>
@@ -223,6 +228,7 @@ export default {
     ]);
 
     // internal lists
+    const loading = ref(false);
     const projects = ref([]);
     const tasks = ref([]);
     const teamMembers = ref([]);
@@ -300,7 +306,7 @@ export default {
     // Stats array shape expected by template
     const statsList = computed(() => [
       { label: 'Active Projects', value: stats.activeProjects ?? 0, color: 'var(--primary)' },
-      { label: 'Total Tasks',    value: stats.totalTasks ?? 0,    color: 'var(--primary)' },
+      { label: 'Live Tasks',    value: stats.totalTasks ?? 0,    color: 'var(--primary)' },
       { label: 'Team Members',   value: stats.teamMembers ?? 0,   color: 'var(--success)' },
       { label: 'Completion Rate',value: stats.completionRate ?? '0%', color: 'var(--warning)' }
     ]);
@@ -348,6 +354,7 @@ export default {
 
     // Fetch & populate data
     const fetchDashboardData = async () => {
+      loading.value = true;
       try {
         let user = authService.getCurrentUser() || {};
         if (!user?.company_name) {
@@ -482,6 +489,8 @@ export default {
 
       } catch (err) {
         console.error('Dashboard load error:', err);
+      } finally {
+        loading.value = false;
       }
     };
 
@@ -501,6 +510,7 @@ export default {
 
     return {
       isDark,
+      loading,
       toggleTheme,
       dashboardTitle,
       stats: statsList,

@@ -142,9 +142,9 @@
             />
             <AppButton 
               variant="icon" 
-              icon="fas fa-eye" 
-              tooltip="View Details"
-              @click.stop="selectTask(task)"
+              icon="fas fa-trash" 
+              tooltip="Delete Task"
+              @click.stop="deleteTask(task)"
             />
           </div>
         </div>

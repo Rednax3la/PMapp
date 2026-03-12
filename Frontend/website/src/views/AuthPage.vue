@@ -31,7 +31,7 @@
         <p class="form-subtitle">Sign in to your account</p>
 
         <div class="form-group">
-          <label for="login-username">Username</label>
+          <label for="login-username">Email</label>
           <input 
             id="login-username"
             v-model="loginForm.username" 
@@ -87,7 +87,7 @@
         </div>
 
         <div class="form-group">
-          <label for="register-username">Username</label>
+          <label for="register-username">Email</label>
           <input 
             id="register-username"
             v-model="registerForm.username" 
@@ -177,6 +177,7 @@
 
 <script>
 import { authService } from '@/services/auth'
+import { useUserStore } from '@/store/user'
 
 export default {
   name: 'AuthPage',
@@ -197,19 +198,18 @@ export default {
       registerForm: {
         company_name: '',
         username: '',
-        password: '',  
+        password: '',
         role: ''
       }
     }
   },
   mounted() {
-    // Check if user is already authenticated
     if (authService.isAuthenticated()) {
-      this.$router.push('/')
+      const user = authService.getCurrentUser()
+      this.$router.push(user?.role === 'member' ? '/member-dashboard' : '/')
     }
   },
   methods: {
-
     isEmail(str) {
       const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
       return re.test(str)
@@ -224,19 +224,20 @@ export default {
       this.loading = true
       this.error = null
       this.success = null
-      
+
       try {
-        await authService.login(this.loginForm.username, this.loginForm.password)
-        
-        this.success = 'Login successful! Redirecting to dashboard...'
-        
-        // Redirect after a short delay to show success message
+        const userStore = useUserStore()
+        const response = await userStore.login(this.loginForm.username, this.loginForm.password)
+
+        this.success = 'Login successful! Redirecting...'
+        const role = response?.role || userStore.userRole
+
         setTimeout(() => {
-          this.$router.push('/')
-        }, 1500)
-        
+          this.$router.push(role === 'member' ? '/member-dashboard' : '/')
+        }, 1000)
+
       } catch (error) {
-        this.error = error
+        this.error = error?.message || error || 'Login failed'
       } finally {
         this.loading = false
       }

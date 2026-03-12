@@ -9,8 +9,8 @@ def generate_timetable(project, tasks):
     """
     FIXED: Generate timetable with proper date formatting including month/day names
     """
-    # Get project timezone (default to Africa/Addis_Ababa if not specified)
-    timezone_str = project.get('timezone', 'Africa/Addis_Ababa')
+    # Get project timezone (default to Africa/Nairobi if not specified)
+    timezone_str = project.get('timezone', 'Africa/Nairobi')
     timezone = pytz.timezone(timezone_str)
     
     # Make project start date timezone-aware if it isn't already
@@ -94,8 +94,8 @@ def generate_gantt_chart(tasks):
         # Make task start time timezone-aware if it isn't already
         task_start = task['start_time']
         if task_start.tzinfo is None:
-            # Default to Africa/Addis_Ababa if no timezone info available
-            timezone = pytz.timezone('Africa/Addis_Ababa')
+            # Default to Africa/Nairobi if no timezone info available
+            timezone = pytz.timezone('Africa/Nairobi')
             task_start = timezone.localize(task_start)
         
         # Use expected_duration if task not complete, otherwise use actual duration
@@ -111,8 +111,8 @@ def generate_gantt_chart(tasks):
         state = get_task_state(task['id'])
         
         # Format dates for display
-        task_start_local = task_start.astimezone(pytz.timezone('Africa/Addis_Ababa'))
-        end_time_local = end_time.astimezone(pytz.timezone('Africa/Addis_Ababa'))
+        task_start_local = task_start.astimezone(pytz.timezone('Africa/Nairobi'))
+        end_time_local = end_time.astimezone(pytz.timezone('Africa/Nairobi'))
         
         chart_item = {
             "id": task['id'],
